@@ -71,6 +71,7 @@ setup(name='benchmark-mae',
       packages=find_packages(),
       setup_requires=['numpy >= 1.9.2'],
       ext_modules=extensions,
+      scripts=['benchmark_mae/run_models.py'],
       cmdclass={'build_ext': build_ext},
       install_requires=[
           'IPython >= 3.2.0',

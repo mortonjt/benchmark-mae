@@ -26,7 +26,9 @@ def deposit(table1, table2, metadata, U1, U2, V1, V2, it, rep, output_dir):
         output directory
     """
     choice = 'abcdefghijklmnopqrstuvwxyz'
-    output_table = "%s/table.%d_%s.biom" % (
+    output_microbes = "%s/table_microbes.%d_%s.biom" % (
+        output_dir, it, choice[rep])
+    output_metabolites = "%s/table_metabolites.%d_%s.biom" % (
         output_dir, it, choice[rep])
     output_md = "%s/metadata.%d_%s.txt" % (
         output_dir, it, choice[rep])
@@ -38,16 +40,23 @@ def deposit(table1, table2, metadata, U1, U2, V1, V2, it, rep, output_dir):
         output_dir, it, choice[rep])
     output_V2 = "%s/V2.%d_%s.txt" % (
         output_dir, it, choice[rep])
+    output_ranks = "%s/ranks.%d_%s.txt" % (
+        output_dir, it, choice[rep])
 
     table1 = Table(table1.values.T, table1.columns, table1.index)
     table2 = Table(table2.values.T, table2.columns, table2.index)
 
-    with biom_open(output_table, 'w') as f:
+    with biom_open(output_microbes, 'w') as f:
         table1.to_hdf5(f, generated_by='moi1')
-    with biom_open(output_table, 'w') as f:
+    with biom_open(output_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
+    ranks = U1.T @ U2.T @ V2 @ V1
+    ranks = pd.DataFrame(ranks, index=table1.ids(axis='observation'),
+                         columns=table2.ids(axis='observation'))
+    ranks.to_csv(output_ranks, sep='\t')
     metadata.to_csv(output_md, sep='\t', index_label='#SampleID')
+
     np.savetxt(output_U1, U1)
     np.savetxt(output_U2, U2)
     np.savetxt(output_V1, V1)

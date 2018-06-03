@@ -2,7 +2,7 @@ import click
 import numpy as np
 import pandas as pd
 from biom import load_table
-from skbio.stats.composition import (clr, centralize,
+from skbio.stats.composition import (clr, centralize, closure,
                                      multiplicative_replacement,
                                      _gram_schmidt_basis)
 
@@ -51,6 +51,8 @@ def load_tables(table1_file, table2_file):
 def run_deep_mae(table1_file, table2_file, output_file):
     lam = 0
     dropout_rate = 0.90
+    epochs = 100
+    batch_size = 10
 
     # careful with these parameters
     microbe_latent_dim = 4
@@ -84,32 +86,19 @@ def run_deep_mae(table1_file, table2_file, output_file):
         #callbacks=[tbCallBack],
         epochs=epochs, batch_size=batch_size)
 
-    microbes_df = pd.DataFrame(
-        np.array(test_microbes.matrix_data.todense()).T,
-        index=test_microbes.ids(axis='sample'),
-        columns=test_microbes.ids(axis='observation'))
-
-    metabolites_df = pd.DataFrame(
-        np.array(test_metabolites.matrix_data.todense()).T,
-        index=test_metabolites.ids(axis='sample'),
-        columns=test_metabolites.ids(axis='observation'))
-
-    microbes = closure(microbes_df)
-    metabolites = closure(metabolites_df)
-
     weights = model.get_weights()
     V1 = weights[0]   # ms input weights
     V1b = weights[1]  # ms input bias
     V2 = weights[2]   # ms shared weights
     V2b = weights[3]  # ms shared bias
-    U1 = weights[4]   # otu shared weights
-    U1b = weights[5]  # otu shared bias
-    U2 = weights[6]  # otu output weights
-    U2b = weights[7] # otu output bias
+    U2 = weights[4]   # otu shared weights
+    U2b = weights[5]  # otu shared bias
+    U1 = weights[6]  # otu output weights
+    U1b = weights[7] # otu output bias
 
-    ranks = ((((U2.T + U1b) @ U1.T + V2b) @ V2.T + V1b) @ V1.T)
-    ranks = pd.DataFrame(ranks, index=microbes_df.columns,
-                         columns=metabolites_df.columns)
+    ranks = - U1.T @ U2.T @ V2.T @ V1.T
+    ranks = pd.DataFrame(ranks, index=microbe_ids,
+                         columns=metabolite_ids)
     ranks.to_csv(output_file, sep='\t')
 
 
@@ -131,9 +120,13 @@ def run_pearson(table1_file, table2_file, output_file):
         for j in range(d2):
             res = pearsonr(microbes_df.iloc[:, i],
                            metabolites_df.iloc[:, j])
-            pearson_res[i, j] = res.coefficientpp
+            pearson_res[i, j] = res[0]
+    ranks = pd.DataFrame(
+        pearson_res,
+        index=microbes_df.columns,
+        columns=metabolites_df.columns)
     ranks.to_csv(output_file, sep='\t')
 
 
 if __name__ == "__main__":
-    run_regression()
+    run_models()

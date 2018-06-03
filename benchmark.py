@@ -57,7 +57,7 @@ top_N = 10     # top hits to evaluate
 intervals = 3
 benchmark = 'effect_size'
 reps = 2
-tools = ['deep_mae', 'pearson', 'spearman']
+tools = ['deep_mae', 'pearson']
 
 sample_ids = []
 if regenerate_simulations:
@@ -76,7 +76,7 @@ if regenerate_simulations:
                 num_microbes=20, num_metabolites=200, num_samples=100,
                 num_latent_microbes=5, num_latent_metabolites=10,
                 num_latent_shared=3, low=-1, high=1,
-                microbe_total=10, metabolite_total=100,
+                microbe_total=1000, metabolite_total=10000,
                 uB=ef, sigmaB=1, sigmaQ=0.1,
                 uU1=0, sigmaU1=1, uU2=0, sigmaU2=1,
                 uV1=0, sigmaV1=1, uV2=0, sigmaV2=1,
@@ -105,49 +105,50 @@ if regenerate_simulations:
     with open(config_file, 'w') as yfile:
         yaml.dump(data, yfile, default_flow_style=False)
 
-# if workflow_type == 'local':
-#     cmd = ' '.join([
-#         'snakemake --verbose --nolock',
-#         '--snakefile %s ' % snakefile,
-#         '--local-cores %s ' % local_cores,
-#         '--jobs %s ' % jobs,
-#         '--configfile %s ' % config_file,
-#         '--latency-wait %d' % latency_wait
-#     ])
-#
-# elif workflow_type == 'torque':
-#     eo = '-e {cluster.error} -o {cluster.output} '
-#
-#     cluster_setup = '\" qsub %s\
-#                      -l nodes=1:ppn={cluster.n} \
-#                      -l mem={cluster.mem}gb \
-#                      -l walltime={cluster.time}\" ' % eo
-#
-#     cmd = ' '.join(['snakemake --verbose --nolock',
-#                     '--snakefile %s ' % snakefile,
-#                     '--local-cores %s ' % local_cores,
-#                     '--cores %s ' % cores,
-#                     '--jobs %s ' % jobs,
-#                     '--restart-times %d' % restart_times,
-#                     '--keep-going',
-#                     '--cluster-config %s ' % cluster_config,
-#                     '--cluster %s '  % cluster_setup,
-#                     '--configfile %s ' % config_file,
-#                     '--latency-wait %d' % latency_wait
-#                 ])
-#
-# elif workflow_type == "profile":
-#     cmd = ' '.join(['snakemake --nolock',
-#                     '--snakefile %s ' % snakefile,
-#                     '--cluster-config %s ' % cluster_config,
-#                     '--profile %s '  % profile,
-#                     '--configfile %s ' % config_file
-#                     ]
-#                    )
-#
-# else:
-#     ValueError('Incorrect workflow specified:', workflow_type)
-#
-# print(cmd)
-# proc = subprocess.Popen(cmd, shell=True)
-# proc.wait()
+
+if workflow_type == 'local':
+    cmd = ' '.join([
+        'snakemake --verbose --nolock',
+        '--snakefile %s ' % snakefile,
+        '--local-cores %s ' % local_cores,
+        '--jobs %s ' % jobs,
+        '--configfile %s ' % config_file,
+        '--latency-wait %d' % latency_wait
+    ])
+
+elif workflow_type == 'torque':
+    eo = '-e {cluster.error} -o {cluster.output} '
+
+    cluster_setup = '\" qsub %s\
+                     -l nodes=1:ppn={cluster.n} \
+                     -l mem={cluster.mem}gb \
+                     -l walltime={cluster.time}\" ' % eo
+
+    cmd = ' '.join(['snakemake --verbose --nolock',
+                    '--snakefile %s ' % snakefile,
+                    '--local-cores %s ' % local_cores,
+                    '--cores %s ' % cores,
+                    '--jobs %s ' % jobs,
+                    '--restart-times %d' % restart_times,
+                    '--keep-going',
+                    '--cluster-config %s ' % cluster_config,
+                    '--cluster %s '  % cluster_setup,
+                    '--configfile %s ' % config_file,
+                    '--latency-wait %d' % latency_wait
+                ])
+
+elif workflow_type == "profile":
+    cmd = ' '.join(['snakemake --nolock',
+                    '--snakefile %s ' % snakefile,
+                    '--cluster-config %s ' % cluster_config,
+                    '--profile %s '  % profile,
+                    '--configfile %s ' % config_file
+                    ]
+                   )
+
+else:
+    ValueError('Incorrect workflow specified:', workflow_type)
+
+print(cmd)
+proc = subprocess.Popen(cmd, shell=True)
+proc.wait()
