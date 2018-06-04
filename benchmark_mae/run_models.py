@@ -96,7 +96,10 @@ def run_deep_mae(table1_file, table2_file, output_file):
     U1 = weights[6]  # otu output weights
     U1b = weights[7] # otu output bias
 
+    # print(U1.shape, U2.shape, V2.shape, V1.shape)
+    # ranks = - ((((U2.T + U1b) @ U1.T + V2b) @ V2.T + V1b) @ V1.T)
     ranks = - U1.T @ U2.T @ V2.T @ V1.T
+
     ranks = pd.DataFrame(ranks, index=microbe_ids,
                          columns=metabolite_ids)
     ranks.to_csv(output_file, sep='\t')
@@ -119,6 +122,32 @@ def run_pearson(table1_file, table2_file, output_file):
     for i in range(d1):
         for j in range(d2):
             res = pearsonr(microbes_df.iloc[:, i],
+                           metabolites_df.iloc[:, j])
+            pearson_res[i, j] = res[0]
+    ranks = pd.DataFrame(
+        pearson_res,
+        index=microbes_df.columns,
+        columns=metabolites_df.columns)
+    ranks.to_csv(output_file, sep='\t')
+
+
+@run_models.command()
+@click.option('--table1-file',
+              help='Input biom table of abundances')
+@click.option('--table2-file',
+              help='Input metadata file')
+@click.option('--output-file',
+              help='Saved tensorflow model.')
+def run_spearman(table1_file, table2_file, output_file):
+    microbes_df, metabolites_df = load_tables(
+        table1_file, table2_file)
+    n, d1 = microbes_df.shape
+    n, d2 = metabolites_df.shape
+
+    pearson_res = np.zeros((d1, d2))
+    for i in range(d1):
+        for j in range(d2):
+            res = spearmanr(microbes_df.iloc[:, i],
                            metabolites_df.iloc[:, j])
             pearson_res[i, j] = res[0]
     ranks = pd.DataFrame(

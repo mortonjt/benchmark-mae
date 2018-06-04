@@ -51,7 +51,9 @@ def deposit(table1, table2, metadata, U1, U2, V1, V2, it, rep, output_dir):
     with biom_open(output_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
-    ranks = U1.T @ U2.T @ V2 @ V1
+    ranks = - U1.T @ U2.T @ V2 @ V1
+    # ranks = - ((((U3.T + U2b) @ U2.T + V2b) @ V2.T + V1b) @ V1.T)
+
     ranks = pd.DataFrame(ranks, index=table1.ids(axis='observation'),
                          columns=table2.ids(axis='observation'))
     ranks.to_csv(output_ranks, sep='\t')

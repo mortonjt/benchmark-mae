@@ -29,45 +29,52 @@ def top_absolute_results(result_files, truth_files, output_file, top_N=10):
     out_suf = splitext(basename(output_file))[0]
 
     result_files = list(filter(lambda x: out_suf in basename(x), result_files))
-    index_names = list(map(lambda x: splitext(basename(x))[1], result_files))
+    index_names = list(map(lambda x: splitext(basename(x))[0], result_files))
     col_names = ['%s_TP' % out_suf,
                  '%s_FP' % out_suf,
                  '%s_FN' % out_suf,
                  '%s_TN' % out_suf,
-                 '%s_RK' % out_suf,
-    ]
-    TP, FP, FN, TN, RC = 0, 1, 2, 3, 4
+                 '%s_meanRK' % out_suf]
+    TP, FP, FN, TN, meanRK = 0, 1, 2, 3, 4
 
-    stats = pd.DataFrame(columns=col_names, index=index_names)
-    for r_file, t_file in zip(result_files, truth_files):
+    stats = {}
+    for name, r_file, t_file in zip(index_names, result_files, truth_files):
         res = pd.read_table(r_file, sep='\t', index_col=0)
         exp = pd.read_table(t_file, sep='\t', index_col=0)
 
-        res = pd.melt(res, id_vars=['index'],
-                      var_name='metabolite', value_name='rank')
-        res.rename(columns={'index': 'OTU'})
-
-        exp = pd.melt(exp, id_vars=['index'],
-                      var_name='metabolite', value_name='rank')
-        exp.rename(columns={'index': 'OTU'})
-
-        exp = exp.sort_values(by='rank', ascending=False)
-        res = res.sort_values(by='rank', ascending=False)
         ids = exp.index[:top_N]
-        rank_stat = spearmanr(res.loc[ids, 'rank'].values,
-                              exp.loc[ids, 'rank'].values).correlation
-        ids = set(exp.index)
-        hits = set(res.iloc[:top_N].index)
-        truth = set(exp.iloc[:top_N].index)
+        rank_stats = []
+        x = pd.Series(index=col_names)
+        tps = fps = fns = tns = 0
+        ids = set(exp.columns)
+        for i in exp.index:
+            exp_idx = np.argsort(exp.loc[i, :].values)
+            res_idx = np.argsort(res.loc[i, :].values)
+            exp_names = exp.columns[exp_idx[-top_N:]]
+            res_names = res.columns[res_idx[-top_N:]]
 
-        x = pd.Series(
-            {col_names[TP]: len(hits & truth),
-             col_names[FP]: len(hits - truth),
-             col_names[FN]: len(truth - hits),
-             col_names[TN]: len((ids-hits) & (ids-truth)),
-             col_names[RC]: rank_stat
-            })
-        stats.loc[tab_file] = x
+            r = spearmanr(exp.loc[i, exp_names],
+                          res.loc[i, exp_names])
+
+            hits  = set(res_names)
+            truth = set(exp_names)
+
+            tps += len(hits & truth)
+            fns += len(truth - hits)
+            fps += len(hits - truth)
+            tns += len((ids - hits) & (ids - truth))
+            rank_stats.append(r)
+
+        x = pd.Series({
+            col_names[TP]: tps,
+            col_names[FP]: fps,
+            col_names[FN]: fns,
+            col_names[TN]: tns,
+            col_names[meanRK]: np.mean(rank_stats)
+        })
+        stats[name] = x
+
+    stats = pd.DataFrame(stats, index=col_names).T
     stats.to_csv(output_file, sep='\t')
 
 
@@ -86,13 +93,6 @@ def aggregate_summaries(confusion_matrix_files, metadata_files,
     output_file : str
         Output path for aggregated summaries.
 
-    Note
-    ----
-    This assumes that table_files and metadata_files
-    are in the same matching order.
-
-    table.xxx.biom
-    metadata.xxx.txt
     """
     mats = [pd.read_table(f, index_col=0) for f in confusion_matrix_files]
     merged_stats = pd.concat(mats, axis=1)

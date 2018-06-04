@@ -12,7 +12,7 @@ import yaml
 config_file = 'params.yaml'
 workflow_type = 'local'
 local_cores = 1
-cores = 1
+cores = 4
 jobs = 1
 force = True
 snakefile = 'Snakefile'
@@ -26,7 +26,7 @@ profile = os.path.dirname(__file__)
 restart_times = 1
 
 # simulation parameters
-regenerate_simulations = True
+regenerate_simulations = False
 num_samples = 50
 num_features = 300
 #mu_num = 8            # mean of the numerator taxa
@@ -46,18 +46,18 @@ sigma = 0.5            # variance of the random effects distribution
 pi1 = 0.1              # percentage of the species
 pi2 = 0.3              # percentage of the species
 low = 0                # lower value for spectrum
-high = 3               # higher value for the spectrum
+high = 5               # higher value for the spectrum
 spread = 2             # variance of unimodal species distribution
 feature_bias = 1       # species bias
 alpha = 6              # global sampling depth
 seed = None            # random seed
 
 # benchmark parameters
-top_N = 10     # top hits to evaluate
+top_N = 50     # top hits to evaluate
 intervals = 3
 benchmark = 'effect_size'
-reps = 2
-tools = ['deep_mae', 'pearson']
+oreps = 2
+tools = ['deep_mae', 'pearson', 'spearman']
 
 sample_ids = []
 if regenerate_simulations:
@@ -73,9 +73,9 @@ if regenerate_simulations:
             ef = np.round(ef, decimals=2)
             print('ef', ef, 'r', r)
             res = random_multimodal(
-                num_microbes=20, num_metabolites=200, num_samples=100,
-                num_latent_microbes=5, num_latent_metabolites=10,
-                num_latent_shared=3, low=-1, high=1,
+                num_microbes=100, num_metabolites=1000, num_samples=200,
+                num_latent_microbes=3, num_latent_metabolites=3,
+                num_latent_shared=6, low=-1, high=1,
                 microbe_total=1000, metabolite_total=10000,
                 uB=ef, sigmaB=1, sigmaQ=0.1,
                 uU1=0, sigmaU1=1, uU2=0, sigmaU2=1,
