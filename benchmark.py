@@ -4,7 +4,9 @@ import subprocess
 import numpy as np
 import pandas as pd
 from biom.util import biom_open
-from benchmark_mae.generators import deposit, random_multimodal
+from benchmark_mae.generators import (
+    deposit, random_multimodal, random_sigmoid_multimodal
+)
 import yaml
 
 
@@ -17,7 +19,7 @@ jobs = 1
 force = True
 snakefile = 'Snakefile'
 dry_run = False
-output_dir = 'effect_size_small/'
+output_dir = 'effect_size_benchmark2/'
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -56,7 +58,7 @@ seed = None            # random seed
 top_N = 50     # top hits to evaluate
 intervals = 3
 benchmark = 'effect_size'
-oreps = 2
+reps = 2
 tools = ['deep_mae', 'pearson', 'spearman']
 
 sample_ids = []
@@ -72,7 +74,7 @@ if regenerate_simulations:
             sample_id = i
             ef = np.round(ef, decimals=2)
             print('ef', ef, 'r', r)
-            res = random_multimodal(
+            res = random_sigmoid_multimodal(
                 num_microbes=100, num_metabolites=1000, num_samples=200,
                 num_latent_microbes=3, num_latent_metabolites=3,
                 num_latent_shared=6, low=-1, high=1,
@@ -85,9 +87,7 @@ if regenerate_simulations:
             # setup metadata
             X = pd.DataFrame(X, index=microbe_counts.index,
                              columns=['X%d' % d for d in range(X.shape[1])])
-            Q = pd.DataFrame(Q, index=microbe_counts.index,
-                             columns=['Q%d' % d for d in range(Q.shape[1])])
-            metadata = pd.concat((X, Q), axis=1)
+            metadata = X
             metadata['effect_size'] = ef
             deposit(microbe_counts, metabolite_counts,
                     metadata, U1, U2, V1, V2,

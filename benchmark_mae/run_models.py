@@ -16,7 +16,7 @@ import io
 from patsy import dmatrix
 
 import tensorflow as tf
-from deep_mae.multimodal import build_model
+from deep_mae.multimodal import build_model, build_simple_model, onehot
 import pickle
 
 
@@ -51,12 +51,12 @@ def load_tables(table1_file, table2_file):
 def run_deep_mae(table1_file, table2_file, output_file):
     lam = 0
     dropout_rate = 0.90
-    epochs = 100
-    batch_size = 10
+    epochs = 10
+    batch_size = 100
 
     # careful with these parameters
-    microbe_latent_dim = 4
-    metabolite_latent_dim = 4
+    microbe_latent_dim = 3
+    metabolite_latent_dim = 3
 
     microbes_df, metabolites_df = load_tables(
         table1_file, table2_file)
@@ -66,40 +66,39 @@ def run_deep_mae(table1_file, table2_file, output_file):
     metabolite_ids = metabolites_df.columns
 
     # normalize the microbe and metabolite counts to sum to 1
-    microbes = closure(microbes_df)
-    metabolites = closure(metabolites_df)
+    #microbes = closure(microbes_df)
+    #metabolites = closure(metabolites_df)
+    otu_hits, ms_hits = onehot(microbes_df.values, closure(metabolites_df.values))
     params = []
 
-    model = build_model(microbes, metabolites,
-                        microbe_latent_dim=microbe_latent_dim,
-                        metabolite_latent_dim=metabolite_latent_dim,
-                        dropout_rate=dropout_rate,
-                        lam=lam)
+    # model = build_model(microbes, metabolites,
+    #                     microbe_latent_dim=microbe_latent_dim,
+    #                     metabolite_latent_dim=metabolite_latent_dim,
+    #                     dropout_rate=dropout_rate,
+    #                     lam=lam)
+    model = build_simple_model(
+        microbes_df, metabolites_df,
+        latent_dim=microbe_latent_dim, lam=lam,
+        dropout_rate=0.9
+    )
+
     model.fit(
         {
-            'ms_input': metabolites
+            'otu_input': otu_hits,
         },
         {
-            'otu_output': microbes,
+            'ms_output': ms_hits
         },
         verbose=0,
         #callbacks=[tbCallBack],
         epochs=epochs, batch_size=batch_size)
 
     weights = model.get_weights()
-    V1 = weights[0]   # ms input weights
-    V1b = weights[1]  # ms input bias
-    V2 = weights[2]   # ms shared weights
-    V2b = weights[3]  # ms shared bias
-    U2 = weights[4]   # otu shared weights
-    U2b = weights[5]  # otu shared bias
-    U1 = weights[6]  # otu output weights
-    U1b = weights[7] # otu output bias
+    U, V = weights[0], weights[1]
+    # V1, V2, U2, U1 = weights[0], weights[5], weights[10], weights[15]
 
-    # print(U1.shape, U2.shape, V2.shape, V1.shape)
-    # ranks = - ((((U2.T + U1b) @ U1.T + V2b) @ V2.T + V1b) @ V1.T)
-    ranks = - U1.T @ U2.T @ V2.T @ V1.T
-
+    #ranks = - (V1 @ V2 @ U2 @ U1).T
+    ranks = U @ V
     ranks = pd.DataFrame(ranks, index=microbe_ids,
                          columns=metabolite_ids)
     ranks.to_csv(output_file, sep='\t')
