@@ -28,7 +28,7 @@ profile = os.path.dirname(__file__)
 restart_times = 1
 
 # simulation parameters
-regenerate_simulations = True
+regenerate_simulations = False
 num_samples = 100
 num_microbes = 200
 num_metabolites = 300

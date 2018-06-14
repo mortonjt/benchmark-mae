@@ -17,6 +17,8 @@ from patsy import dmatrix
 
 import tensorflow as tf
 from deep_mae.multimodal import build_model, onehot
+from tensorflow.contrib.distributions import Multinomial, Normal
+
 import pickle
 
 
@@ -112,7 +114,7 @@ def optimize(log_loss, learning_rate, beta1, beta2, clipping_size):
         train_ = optimizer.apply_gradients(zip(gradients, variables))
         return train_, gradients, variables
 
-def build_tf_model(d1, d2, u_mean=0, u_scale=1, v_mean=0, v_scale=1,
+def build_tf_model(num_samples, d1, d2, u_mean=0, u_scale=1, v_mean=0, v_scale=1,
                    batch_size=50, latent_dim=3, dropout_rate=0.5, lam=0,
                    learning_rate = 0.1, beta_1=0.999, beta_2=0.9999, clipnorm=10.):
     """ Build a tensorflow model
@@ -167,16 +169,20 @@ def build_tf_model(d1, d2, u_mean=0, u_scale=1, v_mean=0, v_scale=1,
 @click.option('--output-file',
               help='Saved tensorflow model.')
 def run_tf_mae(table1_file, table2_file, output_file):
-    lam = 0
 
+    microbes_df, metabolites_df = load_tables(
+        table1_file, table2_file)
+    d1, d2 = microbes_df.shape[1], metabolites_df.shape[1]
+    num_samples = microbes_df.shape[0]
+
+    # parameters
     epochs = 10
+    num_iter = epochs * num_samples
     batch_size = 100
     learning_rate = 0.1
     u_mean, u_scale = 0, 1
     v_mean, v_scale = 0, 1
-
-    microbes_df, metabolites_df = load_tables(
-        table1_file, table2_file)
+    latent_dim = 3
 
     # filter out low abundance microbes
     microbe_ids = microbes_df.columns
@@ -186,15 +192,13 @@ def run_tf_mae(table1_file, table2_file, output_file):
     #microbes = closure(microbes_df)
     #metabolites = closure(metabolites_df)
     otu_hits, ms_hits, sample_ids = onehot(
-        microbes_df.values, closure(metabolites_df.values))
+        microbes_df.values, metabolites_df.values)
     params = []
 
-    otu_hits, ms_hits, sample_ids = onehot(microbes.values, metabolites.values)
-
     with tf.Graph().as_default(), tf.Session() as session:
-        d1, d2 = microbes.shape[1], metabolites.shape[1]
 
-        res = build_model(
+        res = build_tf_model(
+            num_samples,
             d1, d2, latent_dim=latent_dim, batch_size=batch_size,
             u_mean=u_mean, u_scale=u_scale, v_mean=v_mean, v_scale=v_scale,
             learning_rate=learning_rate, beta_1=0.9, beta_2=0.99, clipnorm=10.)
@@ -206,12 +210,12 @@ def run_tf_mae(table1_file, table2_file, output_file):
             batch = np.random.randint(
                 otu_hits.shape[0], size=batch_size)
             batch_ids = sample_ids[batch]
-            total = metabolites.values[batch_ids, :].sum(axis=1).astype(np.float32)
+            total = metabolites_df.values[batch_ids, :].sum(axis=1).astype(np.float32)
             train_, loss, rU, rV = session.run(
                 [train, log_loss, qU, qV],
                 feed_dict={
                     X_ph: otu_hits[batch],
-                    Y_ph: metabolites.values[batch_ids, :],
+                    Y_ph: metabolites_df.values[batch_ids, :],
                     total_count: total
                 }
             )
