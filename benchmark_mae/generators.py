@@ -63,6 +63,8 @@ def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
     ranks.to_csv(output_ranks, sep='\t')
     metadata.to_csv(output_md, sep='\t', index_label='#SampleID')
 
+    B = B[:, idx1]
+
     np.savetxt(output_U, U)
     np.savetxt(output_V, V)
     np.savetxt(output_B, B)

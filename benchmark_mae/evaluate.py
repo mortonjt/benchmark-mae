@@ -38,6 +38,7 @@ def top_rank_accuracy(res, exp, B, top_OTU, top_MS):
     lo_r = []
 
     for i in lo:
+
         ridx = np.argsort(exp.iloc[i, :]).values[-top_MS:]
         eidx = np.argsort(res.iloc[i, :]).values[-top_MS:]
         exp_names = exp.columns[eidx]
