@@ -30,14 +30,14 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = True
 num_samples = 100
-num_microbes = 30
-num_metabolites = 50
-microbe_total = 1000
-metabolite_total = 1000
+num_microbes = 200
+num_metabolites = 300
+microbe_total = 2000
+metabolite_total = 5000
 
 latent_dim = 3
 uB=1; sigmaB = 2; sigmaQ = 1
-uU=0; sigmaU = 2; uV = 1; sigmaV = 2
+uU=0; sigmaU = 1; uV = 0; sigmaV = 1
 low=-2; high=2
 seed = None            # random seed
 
@@ -63,19 +63,19 @@ sigma = 0.5            # variance of the random effects distribution
 pi1 = 0.1              # percentage of the species
 pi2 = 0.3              # percentage of the species
 ef_low = 0.1           # lower value for spectrum
-ef_high = 3            # higher value for the spectrum
+ef_high = 5            # higher value for the spectrum
 spread = 2             # variance of unimodal species distribution
 feature_bias = 1       # species bias
 alpha = 6              # global sampling depth
 
 # benchmark parameters
-top_OTU = 10     # top OTUs to evaluate
-top_MS = 10      # top metabolites to evaluate
+top_OTU = 100     # top OTUs to evaluate
+top_MS = 20       # top metabolites to evaluate
 
 intervals = 3
 benchmark = 'effect_size'
 reps = 2
-tools = ['deep_mae', 'pearson', 'spearman']
+tools = ['deep_mae', 'pearson', 'spearman', 'tf_mae']
 
 sample_ids = []
 if regenerate_simulations:
