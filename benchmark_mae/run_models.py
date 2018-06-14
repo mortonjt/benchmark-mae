@@ -16,7 +16,7 @@ import io
 from patsy import dmatrix
 
 import tensorflow as tf
-from deep_mae.multimodal import build_model, build_simple_model, onehot
+from deep_mae.multimodal import build_model, onehot
 import pickle
 
 
@@ -68,7 +68,8 @@ def run_deep_mae(table1_file, table2_file, output_file):
     # normalize the microbe and metabolite counts to sum to 1
     #microbes = closure(microbes_df)
     #metabolites = closure(metabolites_df)
-    otu_hits, ms_hits = onehot(microbes_df.values, closure(metabolites_df.values))
+    otu_hits, ms_hits, sample_ids = onehot(
+        microbes_df.values, closure(metabolites_df.values))
     params = []
 
     # model = build_model(microbes, metabolites,
@@ -76,7 +77,7 @@ def run_deep_mae(table1_file, table2_file, output_file):
     #                     metabolite_latent_dim=metabolite_latent_dim,
     #                     dropout_rate=dropout_rate,
     #                     lam=lam)
-    model = build_simple_model(
+    model = build_model(
         microbes_df, metabolites_df,
         latent_dim=microbe_latent_dim, lam=lam,
         dropout_rate=0.9
@@ -95,9 +96,6 @@ def run_deep_mae(table1_file, table2_file, output_file):
 
     weights = model.get_weights()
     U, V = weights[0], weights[1]
-    # V1, V2, U2, U1 = weights[0], weights[5], weights[10], weights[15]
-
-    #ranks = - (V1 @ V2 @ U2 @ U1).T
     ranks = U @ V
     ranks = pd.DataFrame(ranks, index=microbe_ids,
                          columns=metabolite_ids)

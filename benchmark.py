@@ -19,7 +19,7 @@ jobs = 1
 force = True
 snakefile = 'Snakefile'
 dry_run = False
-output_dir = 'effect_size_benchmark2/'
+output_dir = 'test_benchmark3/'
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -28,9 +28,24 @@ profile = os.path.dirname(__file__)
 restart_times = 1
 
 # simulation parameters
-regenerate_simulations = False
-num_samples = 50
-num_features = 300
+regenerate_simulations = True
+num_samples = 5
+num_microbes = 20
+num_metabolites = 30
+microbe_total = 1000
+metabolite_total = 2000
+
+latent_dim = 3
+uB=1; sigmaB = 1; sigmaQ = 0.5
+uU=0; sigmaU = 1; uV = 1; sigmaV = 1
+low=-1; high=1
+seed = None            # random seed
+
+#num_microbes = 5000
+#num_metabolites = 10000
+#microbe_total = 20000
+#metabolite_total = 100000
+
 #mu_num = 8            # mean of the numerator taxa
 mu_null = 0            # mean of the common taxa
 #mu_denom = 2          # mean of the denominator taxa
@@ -47,15 +62,16 @@ max_ratio = 5          # largest differential species ratio
 sigma = 0.5            # variance of the random effects distribution
 pi1 = 0.1              # percentage of the species
 pi2 = 0.3              # percentage of the species
-low = 0                # lower value for spectrum
-high = 5               # higher value for the spectrum
+ef_low = 0.5                # lower value for spectrum
+ef_high = 5               # higher value for the spectrum
 spread = 2             # variance of unimodal species distribution
 feature_bias = 1       # species bias
 alpha = 6              # global sampling depth
-seed = None            # random seed
 
 # benchmark parameters
-top_N = 50     # top hits to evaluate
+top_OTU = 5     # top OTUs to evaluate
+top_MS = 10     # top metabolites to evaluate
+
 intervals = 3
 benchmark = 'effect_size'
 reps = 2
@@ -69,28 +85,28 @@ if regenerate_simulations:
         shutil.rmtree(output_dir)
         os.mkdir(output_dir)
 
-    for i, ef in enumerate(np.linspace(low, high, intervals)):
+    for i, ef in enumerate(np.linspace(ef_low, ef_high, intervals)):
         for r in range(reps):
             sample_id = i
             ef = np.round(ef, decimals=2)
-            print('ef', ef, 'r', r)
-            res = random_sigmoid_multimodal(
-                num_microbes=100, num_metabolites=1000, num_samples=200,
-                num_latent_microbes=3, num_latent_metabolites=3,
-                num_latent_shared=6, low=-1, high=1,
-                microbe_total=1000, metabolite_total=10000,
-                uB=ef, sigmaB=1, sigmaQ=0.1,
-                uU1=0, sigmaU1=1, uU2=0, sigmaU2=1,
-                uV1=0, sigmaV1=1, uV2=0, sigmaV2=1,
-                seed=seed)
-            microbe_counts, metabolite_counts, X, Q, U1, U2, V1, V2 = res
+
+            res = random_multimodal(
+                uB=uB, sigmaB = sigmaB, sigmaQ = sigmaQ,
+                uU=uU, sigmaU = sigmaU, uV = uV, sigmaV = sigmaV,
+                num_microbes=num_microbes, num_metabolites=num_metabolites,
+                num_samples=num_samples,
+                latent_dim=latent_dim, low=low, high=high,
+                microbe_total=microbe_total, metabolite_total=metabolite_total,
+                seed=seed
+            )
+            microbe_counts, metabolite_counts, X, B, U, V = res
             # setup metadata
             X = pd.DataFrame(X, index=microbe_counts.index,
                              columns=['X%d' % d for d in range(X.shape[1])])
             metadata = X
             metadata['effect_size'] = ef
             deposit(microbe_counts, metabolite_counts,
-                    metadata, U1, U2, V1, V2,
+                    metadata, U, V, B,
                     sample_id, r, output_dir)
             sample_ids.append(sample_id)
 
@@ -101,7 +117,8 @@ if regenerate_simulations:
             'samples': sample_ids,
             'reps': reps,
             'tools': tools,
-            'top_N': top_N}
+            'top_MS': top_MS,
+            'top_OTU': top_OTU}
     with open(config_file, 'w') as yfile:
         yaml.dump(data, yfile, default_flow_style=False)
 

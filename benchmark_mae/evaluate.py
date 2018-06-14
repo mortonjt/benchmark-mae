@@ -5,7 +5,77 @@ import numpy as np
 from scipy.stats import spearmanr
 
 
-def top_absolute_results(result_files, truth_files, output_file, top_N=10):
+def rank_accuracy(res, exp, top_N):
+    ids = exp.index[:top_N]
+    rank_stats = []
+    x = pd.Series(index=col_names)
+    tps = fps = fns = tns = 0
+    ids = set(exp.columns)
+    for i in exp.index:
+        exp_idx = np.argsort(exp.loc[i, :].values)
+        res_idx = np.argsort(res.loc[i, :].values)
+        exp_names = exp.columns[exp_idx[-top_N:]]
+        res_names = res.columns[res_idx[-top_N:]]
+
+        r = spearmanr(exp.loc[i, exp_names],
+                      res.loc[i, exp_names])
+
+        hits  = set(res_names)
+        truth = set(exp_names)
+
+        tps += len(hits & truth)
+        fns += len(truth - hits)
+        fps += len(hits - truth)
+        tns += len((ids - hits) & (ids - truth))
+        rank_stats.append(r.correlation)
+
+    return rank_stats, tps, fps, fns, tns
+
+def top_rank_accuracy(res, exp, B, top_OTU, top_MS):
+    lo = np.argsort(B[1, :])[:top_OTU]
+    hi = np.argsort(B[1, :])[-top_OTU:]
+    tps = fps = fns = tns = 0
+    ids = set(exp.columns)
+    lo_r = []
+
+    for i in lo:
+        idx = np.argsort(res.iloc[i, :]).values[-top_MS:]
+
+        exp_names = exp.columns[idx]
+        res_names = res.columns[idx]
+        hits  = set(res_names)
+        truth = set(exp_names)
+
+        tps += len(hits & truth)
+        fns += len(truth - hits)
+        fps += len(hits - truth)
+        tns += len((ids - hits) & (ids - truth))
+
+        r = spearmanr(res.iloc[i, idx], exp.iloc[i, idx])
+        lo_r.append(r.correlation)
+
+    hi_r = []
+    for i in hi:
+        idx = np.argsort(res.iloc[i, :]).values[-top_MS:]
+        exp_names = exp.columns[idx]
+        res_names = res.columns[idx]
+        hits  = set(res_names)
+        truth = set(exp_names)
+
+        tps += len(hits & truth)
+        fns += len(truth - hits)
+        fps += len(hits - truth)
+        tns += len((ids - hits) & (ids - truth))
+
+        r = spearmanr(res.iloc[i, idx], exp.iloc[i, idx])
+        hi_r.append(r.correlation)
+    rank_stats = lo_r + hi_r
+
+    return rank_stats, tps, fps, fns, tns
+
+
+def top_absolute_results(result_files, truth_files, parameter_files,
+                         output_file, top_OTU=10, top_MS=20):
     """ Computes confusion matrice over all runs for a
     specified set of results for top results.
 
@@ -18,6 +88,10 @@ def top_absolute_results(result_files, truth_files, output_file, top_N=10):
         List of filepaths for estimated correlated features.
     truth_files : list of str
         List of filepaths for ground truth correlated features.
+    parameter_files : list of str
+        List of filepaths for ground truth simulation parameters.
+        These are the regression coefficients used to generate the
+        microbial table.
     output_file : str
         File path for confusion matrix summary.
 
@@ -38,32 +112,13 @@ def top_absolute_results(result_files, truth_files, output_file, top_N=10):
     TP, FP, FN, TN, meanRK = 0, 1, 2, 3, 4
 
     stats = {}
-    for name, r_file, t_file in zip(index_names, result_files, truth_files):
+    for name, r_file, t_file, p_file in zip(
+            index_names, result_files, truth_files, parameter_files):
         res = pd.read_table(r_file, sep='\t', index_col=0)
         exp = pd.read_table(t_file, sep='\t', index_col=0)
-
-        ids = exp.index[:top_N]
-        rank_stats = []
-        x = pd.Series(index=col_names)
-        tps = fps = fns = tns = 0
-        ids = set(exp.columns)
-        for i in exp.index:
-            exp_idx = np.argsort(exp.loc[i, :].values)
-            res_idx = np.argsort(res.loc[i, :].values)
-            exp_names = exp.columns[exp_idx[-top_N:]]
-            res_names = res.columns[res_idx[-top_N:]]
-
-            r = spearmanr(exp.loc[i, exp_names],
-                          res.loc[i, exp_names])
-
-            hits  = set(res_names)
-            truth = set(exp_names)
-
-            tps += len(hits & truth)
-            fns += len(truth - hits)
-            fps += len(hits - truth)
-            tns += len((ids - hits) & (ids - truth))
-            rank_stats.append(r)
+        B = np.loadtxt(p_file)
+        rank_stats, tps, fps, fns, tns = top_rank_accuracy(
+            res, exp, B, top_OTU, top_MS)
 
         x = pd.Series({
             col_names[TP]: tps,

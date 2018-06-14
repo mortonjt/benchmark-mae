@@ -7,7 +7,7 @@ from biom.util import biom_open
 from biom import Table
 
 
-def deposit(table1, table2, metadata, U1, U2, V1, V2, it, rep, output_dir):
+def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
     """ Writes down tables, metadata and feature metadata into files.
 
     Parameters
@@ -32,13 +32,11 @@ def deposit(table1, table2, metadata, U1, U2, V1, V2, it, rep, output_dir):
         output_dir, it, choice[rep])
     output_md = "%s/metadata.%d_%s.txt" % (
         output_dir, it, choice[rep])
-    output_U1 = "%s/U1.%d_%s.txt" % (
+    output_U = "%s/U.%d_%s.txt" % (
         output_dir, it, choice[rep])
-    output_U2 = "%s/U2.%d_%s.txt" % (
+    output_V = "%s/V.%d_%s.txt" % (
         output_dir, it, choice[rep])
-    output_V1 = "%s/V1.%d_%s.txt" % (
-        output_dir, it, choice[rep])
-    output_V2 = "%s/V2.%d_%s.txt" % (
+    output_B = "%s/B.%d_%s.txt" % (
         output_dir, it, choice[rep])
     output_ranks = "%s/ranks.%d_%s.txt" % (
         output_dir, it, choice[rep])
@@ -51,17 +49,16 @@ def deposit(table1, table2, metadata, U1, U2, V1, V2, it, rep, output_dir):
     with biom_open(output_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
-    ranks = - U1.T @ U2.T @ V2 @ V1
+    ranks = U @ V
 
     ranks = pd.DataFrame(ranks, index=table1.ids(axis='observation'),
                          columns=table2.ids(axis='observation'))
     ranks.to_csv(output_ranks, sep='\t')
     metadata.to_csv(output_md, sep='\t', index_label='#SampleID')
 
-    np.savetxt(output_U1, U1)
-    np.savetxt(output_U2, U2)
-    np.savetxt(output_V1, V1)
-    np.savetxt(output_V2, V2)
+    np.savetxt(output_U, U)
+    np.savetxt(output_V, V)
+    np.savetxt(output_B, B)
 
 
 def random_sigmoid_multimodal(
@@ -169,12 +166,10 @@ def random_sigmoid_multimodal(
 
 
 def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
-                      num_latent_microbes=5, num_latent_metabolites=10,
-                      num_latent_shared=3, low=-1, high=1,
+                      latent_dim=3, low=-1, high=1,
                       microbe_total=10, metabolite_total=100,
                       uB=0, sigmaB=2, sigmaQ=0.1,
-                      uU1=0, sigmaU1=1, uU2=0, sigmaU2=1,
-                      uV1=0, sigmaV1=1, uV2=0, sigmaV2=1,
+                      uU=0, sigmaU=1, uV=0, sigmaV=1,
                       seed=0):
     """
     Parameters
@@ -185,12 +180,8 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
        Number of molecules to simulate
     num_samples : int
        Number of samples to generate
-    num_latent_microbes :
-       Number of latent microbial dimensions
-    num_latent_metabolites
-       Number of latent metabolite dimensions
-    num_latent_shared
-       Number of dimensions in shared representation
+    latent_dim :
+       Number of latent dimensions
     low : float
        Lower bound of gradient
     high : float
@@ -205,24 +196,14 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
        Standard deviation of regression coefficient distribution
     sigmaQ : float
        Standard deviation of error distribution
-    uU1 : float
+    uU : float
        Mean of microbial input projection coefficient distribution
-    sigmaU1 : float
+    sigmaU : float
        Standard deviation of microbial input projection
        coefficient distribution
-    uU2 : float
-       Mean of microbe output projection coefficient distribution
-    sigmaU2 : float
-       Standard deviation of microbe output projection
-       coefficient distribution
-    uV1 : float
-       Mean of metabolite input projection coefficient distribution
-    sigmaU1 : float
-       Standard deviation of metabolite input projection
-       coefficient distribution
-    uV2 : float
+    uV : float
        Mean of metabolite output projection coefficient distribution
-    sigmaU2 : float
+    sigmaV : float
        Standard deviation of metabolite output projection
        coefficient distribution
     seed : float
@@ -235,7 +216,6 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     metabolite_counts : pd.DataFrame
        Count table of metabolite counts
     """
-    k = num_latent_shared
     state = check_random_state(seed)
     # only have two coefficients
     beta = state.normal(uB, sigmaB, size=(2, num_microbes))
@@ -245,21 +225,16 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
 
     microbes = softmax(state.normal(X @ beta, sigmaQ))
 
-    U1 = state.normal(
-        uU1, sigmaU1, size=(num_latent_microbes, num_microbes))
-    U2 = state.normal(
-        uU2, sigmaU2, size=(k, num_latent_microbes))
-    V1 = state.normal(
-        uV1, sigmaV1, size=(num_latent_metabolites, num_metabolites))
-    V2 = state.normal(
-        uV2, sigmaV2, size=(k, num_latent_metabolites))
+    U = state.normal(
+        uU, sigmaU, size=(num_microbes, latent_dim))
+    V = state.normal(
+        uV, sigmaV, size=(latent_dim, num_metabolites))
 
-
-    probs = softmax((U2 @ U1).T @ (V2 @ V1))
+    probs = softmax(U @ V)
     microbe_counts = np.zeros((num_samples, num_microbes))
     metabolite_counts = np.zeros((num_samples, num_metabolites))
     n1 = microbe_total
-    n2 = metabolite_total // n1
+    n2 = metabolite_total // microbe_total
     for n in range(num_samples):
         otu = np.random.multinomial(n1, microbes[n, :])
         for i in range(num_microbes):
@@ -276,4 +251,4 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     metabolite_counts = pd.DataFrame(
         metabolite_counts, index=sample_ids, columns=ms_ids)
 
-    return microbe_counts, metabolite_counts, X, beta, U1, U2, V1, V2
+    return microbe_counts, metabolite_counts, X, beta, U, V
