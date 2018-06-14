@@ -8,7 +8,6 @@ from scipy.stats import spearmanr
 def rank_accuracy(res, exp, top_N):
     ids = exp.index[:top_N]
     rank_stats = []
-    x = pd.Series(index=col_names)
     tps = fps = fns = tns = 0
     ids = set(exp.columns)
     for i in exp.index:
@@ -45,7 +44,6 @@ def top_rank_accuracy(res, exp, B, top_OTU, top_MS):
         res_names = res.columns[ridx]
         hits  = set(res_names)
         truth = set(exp_names)
-
         tps += len(hits & truth)
         fns += len(truth - hits)
         fps += len(hits - truth)
@@ -111,7 +109,7 @@ def top_absolute_results(result_files, truth_files, parameter_files,
                  '%s_TN' % out_suf,
                  '%s_meanRK' % out_suf]
     TP, FP, FN, TN, meanRK = 0, 1, 2, 3, 4
-
+    x = pd.Series(index=col_names)
     stats = {}
     for name, r_file, t_file, p_file in zip(
             index_names, result_files, truth_files, parameter_files):
@@ -120,6 +118,9 @@ def top_absolute_results(result_files, truth_files, parameter_files,
         B = np.loadtxt(p_file)
         rank_stats, tps, fps, fns, tns = top_rank_accuracy(
             res, exp, B, top_OTU, top_MS)
+
+        # rank_stats, tps, fps, fns, tns = rank_accuracy(
+        #     res, exp, top_MS)
 
         x = pd.Series({
             col_names[TP]: tps,

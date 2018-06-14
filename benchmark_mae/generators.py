@@ -41,6 +41,11 @@ def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
     output_ranks = "%s/ranks.%d_%s.txt" % (
         output_dir, it, choice[rep])
 
+    idx1 = table1.sum(axis=0) > 0
+    idx2 = table2.sum(axis=0) > 0
+    table1 = table1.loc[:, idx1]
+    table2 = table2.loc[:, idx2]
+
     table1 = Table(table1.values.T, table1.columns, table1.index)
     table2 = Table(table2.values.T, table2.columns, table2.index)
 
@@ -49,8 +54,10 @@ def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
     with biom_open(output_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
-    ranks = U @ V
+    ranks = (U @ V)
 
+    ranks = ranks[idx1, :]
+    ranks = ranks[:, idx2]
     ranks = pd.DataFrame(ranks, index=table1.ids(axis='observation'),
                          columns=table2.ids(axis='observation'))
     ranks.to_csv(output_ranks, sep='\t')
@@ -250,5 +257,10 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
         microbe_counts, index=sample_ids, columns=otu_ids)
     metabolite_counts = pd.DataFrame(
         metabolite_counts, index=sample_ids, columns=ms_ids)
+
+    # if np.any(microbe_counts.sum(axis=1) == 0):
+    #     raise ValueError('Unobserved OTUs')
+    # if np.any(metabolites_counts.sum(axis=1) == 0):
+    #     raise ValueError('Unobserved metabolites')
 
     return microbe_counts, metabolite_counts, X, beta, U, V
