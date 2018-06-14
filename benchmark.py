@@ -29,16 +29,16 @@ restart_times = 1
 
 # simulation parameters
 regenerate_simulations = True
-num_samples = 5
+num_samples = 1000
 num_microbes = 20
-num_metabolites = 30
+num_metabolites = 40
 microbe_total = 1000
-metabolite_total = 2000
+metabolite_total = 1000
 
 latent_dim = 3
-uB=1; sigmaB = 1; sigmaQ = 0.5
+uB=1; sigmaB = 2; sigmaQ = 1
 uU=0; sigmaU = 1; uV = 1; sigmaV = 1
-low=-1; high=1
+low=-2; high=2
 seed = None            # random seed
 
 #num_microbes = 5000
@@ -62,15 +62,15 @@ max_ratio = 5          # largest differential species ratio
 sigma = 0.5            # variance of the random effects distribution
 pi1 = 0.1              # percentage of the species
 pi2 = 0.3              # percentage of the species
-ef_low = 0.5                # lower value for spectrum
-ef_high = 5               # higher value for the spectrum
+ef_low = 0.5           # lower value for spectrum
+ef_high = 5            # higher value for the spectrum
 spread = 2             # variance of unimodal species distribution
 feature_bias = 1       # species bias
 alpha = 6              # global sampling depth
 
 # benchmark parameters
-top_OTU = 5     # top OTUs to evaluate
-top_MS = 10     # top metabolites to evaluate
+top_OTU = 20     # top OTUs to evaluate
+top_MS = 40      # top metabolites to evaluate
 
 intervals = 3
 benchmark = 'effect_size'
@@ -97,8 +97,8 @@ if regenerate_simulations:
                 num_samples=num_samples,
                 latent_dim=latent_dim, low=low, high=high,
                 microbe_total=microbe_total, metabolite_total=metabolite_total,
-                seed=seed
-            )
+                seed=seed)
+
             microbe_counts, metabolite_counts, X, B, U, V = res
             # setup metadata
             X = pd.DataFrame(X, index=microbe_counts.index,

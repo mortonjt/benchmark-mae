@@ -39,10 +39,10 @@ def top_rank_accuracy(res, exp, B, top_OTU, top_MS):
     lo_r = []
 
     for i in lo:
-        idx = np.argsort(res.iloc[i, :]).values[-top_MS:]
-
-        exp_names = exp.columns[idx]
-        res_names = res.columns[idx]
+        ridx = np.argsort(exp.iloc[i, :]).values[-top_MS:]
+        eidx = np.argsort(res.iloc[i, :]).values[-top_MS:]
+        exp_names = exp.columns[eidx]
+        res_names = res.columns[ridx]
         hits  = set(res_names)
         truth = set(exp_names)
 
@@ -51,14 +51,15 @@ def top_rank_accuracy(res, exp, B, top_OTU, top_MS):
         fps += len(hits - truth)
         tns += len((ids - hits) & (ids - truth))
 
-        r = spearmanr(res.iloc[i, idx], exp.iloc[i, idx])
+        r = spearmanr(res.iloc[i, eidx], exp.iloc[i, eidx])
         lo_r.append(r.correlation)
 
     hi_r = []
     for i in hi:
-        idx = np.argsort(res.iloc[i, :]).values[-top_MS:]
-        exp_names = exp.columns[idx]
-        res_names = res.columns[idx]
+        ridx = np.argsort(exp.iloc[i, :]).values[-top_MS:]
+        eidx = np.argsort(res.iloc[i, :]).values[-top_MS:]
+        exp_names = exp.columns[eidx]
+        res_names = res.columns[ridx]
         hits  = set(res_names)
         truth = set(exp_names)
 
@@ -67,7 +68,7 @@ def top_rank_accuracy(res, exp, B, top_OTU, top_MS):
         fps += len(hits - truth)
         tns += len((ids - hits) & (ids - truth))
 
-        r = spearmanr(res.iloc[i, idx], exp.iloc[i, idx])
+        r = spearmanr(res.iloc[i, ridx], exp.iloc[i, eidx])
         hi_r.append(r.correlation)
     rank_stats = lo_r + hi_r
 
