@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import click
 import numpy as np
 import pandas as pd
@@ -14,7 +15,7 @@ import tempfile
 from subprocess import Popen
 import io
 from patsy import dmatrix
-
+from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
 from deep_mae.multimodal import Autoencoder, onehot
 from tensorflow.contrib.distributions import Multinomial, Normal
