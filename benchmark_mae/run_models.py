@@ -141,8 +141,8 @@ def run_deep_mae(table1_file, table2_file, output_file):
         model = Autoencoder(session, num_samples, d1, d2,
                             latent_dim=latent_dim)
         model.fit(microbes_df.values, metabolites_df.values, epoch=epochs)
-        res = softmax(np.hstack((np.zeros((d1, 1)), model.U @ model.V)))
-        ranks = clr(softmax(np.hstack((np.zeros((d1, 1)), U @ V))))
+        ranks = clr(softmax(
+            np.hstack((np.zeros((d1, 1)), model.U @ model.V))))
         ranks = pd.DataFrame(ranks, index=microbes_df.columns,
                              columns=metabolites_df.columns)
 
