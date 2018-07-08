@@ -11,7 +11,8 @@ import yaml
 
 
 # snakemake config
-config_file = 'params.yaml'
+iteration = 12
+config_file = 'params%d.yaml' % iteration
 workflow_type = 'local'
 local_cores = 1
 cores = 4
@@ -19,7 +20,7 @@ jobs = 1
 force = True
 snakefile = 'Snakefile'
 dry_run = False
-output_dir = 'test_benchmark4/'
+output_dir = 'test_benchmark%d/' % iteration
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -31,51 +32,28 @@ restart_times = 1
 regenerate_simulations = False
 num_samples = 100
 num_microbes = 200
-num_metabolites = 300
-microbe_total = 2000
-metabolite_total = 5000
+num_metabolites = 1000
+microbe_total = 5000
+metabolite_total = 100000
 
-latent_dim = 3
-uB=1; sigmaB = 2; sigmaQ = 1
-uU=0; sigmaU = 1; uV = 0; sigmaV = 1
-low=-2; high=2
+# note deep mae stands out in small effect size areas
+latent_dim = 2
+uB=0; sigmaB = 1; sigmaQ = 0.1
+uU=0; sigmaU = 1; uV = 0; sigmaV = 2
+low=-1; high=1
 seed = None            # random seed
 
-#num_microbes = 5000
-#num_metabolites = 10000
-#microbe_total = 20000
-#metabolite_total = 100000
-
-#mu_num = 8            # mean of the numerator taxa
-mu_null = 0            # mean of the common taxa
-#mu_denom = 2          # mean of the denominator taxa
-max_diff = 4           # largest separation between the normals
-min_diff = 0.5         # smallest separation between the normals
-min_alpha = 3          # smallest sequencing depth
-max_alpha = 9          # largest sequencing depth
-min_bias = 0.1         # smallest feature bias variance
-max_bias = 3           # largest feature bias variance
-min_null = 0.9         # smallest proportion of null species
-max_null = 0.1         # largest proportion of null species
-min_ratio = 1          # smallest differential species ratio
-max_ratio = 5          # largest differential species ratio
-sigma = 0.5            # variance of the random effects distribution
-pi1 = 0.1              # percentage of the species
-pi2 = 0.3              # percentage of the species
 ef_low = 0.1           # lower value for spectrum
 ef_high = 5            # higher value for the spectrum
-spread = 2             # variance of unimodal species distribution
-feature_bias = 1       # species bias
-alpha = 6              # global sampling depth
 
 # benchmark parameters
-top_OTU = 100     # top OTUs to evaluate
+top_OTU = 50      # top OTUs to evaluate
 top_MS = 20       # top metabolites to evaluate
 
 intervals = 3
 benchmark = 'effect_size'
-reps = 2
-tools = ['deep_mae', 'pearson', 'spearman', 'tf_mae']
+reps = 1
+tools = ['deep_mae', 'pearson', 'spearman']
 
 sample_ids = []
 if regenerate_simulations:
@@ -89,7 +67,7 @@ if regenerate_simulations:
         for r in range(reps):
             sample_id = i
             ef = np.round(ef, decimals=2)
-
+            print(ef)
             res = random_multimodal(
                 uB=uB, sigmaB = ef, sigmaQ = sigmaQ,
                 uU=uU, sigmaU = sigmaU, uV = uV, sigmaV = sigmaV,
@@ -118,7 +96,26 @@ if regenerate_simulations:
             'reps': reps,
             'tools': tools,
             'top_MS': top_MS,
-            'top_OTU': top_OTU}
+            'top_OTU': top_OTU,
+            # parameters to simulate the model
+            'num_samples' : num_samples,
+            'num_microbes' : num_microbes,
+            'num_metabolites' : num_metabolites,
+            'microbe_total' : microbe_total,
+            'metabolite_total' : metabolite_total,
+            'latent_dim' : latent_dim,
+            'uB' : uB,
+            'sigmaB' : sigmaB,
+            'sigmaQ' : sigmaQ,
+            'uU' : uU,
+            'sigmaU' : sigmaU,
+            'uV' : uV,
+            'sigmaV' : sigmaV,
+            'low' : low,
+            'high' : high,
+            'ef_low' : ef_low,
+            'ef_high' : ef_high
+    }
     with open(config_file, 'w') as yfile:
         yaml.dump(data, yfile, default_flow_style=False)
 
