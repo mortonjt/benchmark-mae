@@ -179,7 +179,7 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
                       microbe_total=10, metabolite_total=100,
                       uB=0, sigmaB=2, sigmaQ=0.1,
                       uU=0, sigmaU=1, uV=0, sigmaV=1,
-                      seed=0):
+                      kappa=1, seed=0):
     """
     Parameters
     ----------
@@ -245,10 +245,10 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     n1 = microbe_total
     n2 = metabolite_total // microbe_total
     for n in range(num_samples):
-        N1 = np.random.poisson(n1)
+        N1 = np.random.poisson(np.random.lognormal(n1, kappa))
         otu = np.random.multinomial(N1, microbes[n, :])
         for i in range(num_microbes):
-            N2 = np.random.poisson(otu[i] * n2)
+            N2 = np.random.poisson(np.random.lognormal(otu[i] * n2, kappa))
             ms = np.random.multinomial(N2, probs[i, :])
             metabolite_counts[n, :] += ms
         microbe_counts[n, :] += otu
