@@ -38,7 +38,6 @@ rule run_tool:
             --output-file {output}
         """)
 
-
 rule summarize:
     input:
         results = expand(output_dir + "{tool}.{sample}.results",
