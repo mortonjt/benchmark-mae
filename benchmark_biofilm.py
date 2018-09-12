@@ -11,14 +11,14 @@ import yaml
 
 
 # snakemake config
-iteration = 12
+iteration = 1
 config_file = 'params%d.yaml' % iteration
 workflow_type = 'local'
 local_cores = 1
 cores = 4
 jobs = 1
 force = True
-snakefile = 'Snakefile'
+snakefile = 'Snakebiofilm'
 dry_run = False
 output_dir = 'test_benchmark%d/' % iteration
 quiet=False
