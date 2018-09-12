@@ -42,13 +42,13 @@ sigmaU = 1
 uV = 0
 sigmaV = 1
 latent_dim = 3
-sigmaQmin = 0.01
-sigmaQmax = 3
+sigmaQ = 1
 
-microbe_total = 5e2
+microbe_total = 10e2
 metabolite_total = 10e8
 
-microbe_kappa = 2.5
+microbe_kappa_min = 0.1
+microbe_kappa_max = 3
 metabolite_kappa = 1
 
 timepoint = 9
@@ -62,10 +62,15 @@ timepoint = 9
 intervals = 2
 benchmark = 'effect_size'
 reps = 1
-tools = ['deep_mae', 'pearson', 'spearman']
+tools = [#'deep_mae',
+         'pearson', 'spearman']
 
-sigmaQ = np.linspace(sigmaQmin, sigmaQmax, intervals)
-sigmaQ = list(map(float, sigmaQ.tolist()))
+microbe_kappa = list(map(float, np.linspace(
+    microbe_kappa_min,
+    microbe_kappa_max,
+    intervals
+)))
+
 sample_ids = []
 choice = 'abcdefghijklmnopqrstuvwxyz'
 if regenerate_simulations:
@@ -76,17 +81,17 @@ if regenerate_simulations:
         shutil.rmtree(output_dir)
         os.mkdir(output_dir)
 
-    for i, s in enumerate(sigmaQ):
+    for i, s in enumerate(microbe_kappa):
         for r in range(reps):
             sample_id = '%d_%s' % (s, choice[r])
             df = cystic_fibrosis_simulation('benchmark_mae/data')
             res = random_biofilm(
                 df, uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
-                sigmaQ=s, latent_dim=latent_dim,
+                sigmaQ=sigmaQ, latent_dim=latent_dim,
                 num_microbes=num_microbes,
                 num_metabolites=num_metabolites,
                 microbe_total=microbe_total,
-                microbe_kappa=microbe_kappa,
+                microbe_kappa=s,
                 metabolite_total=metabolite_total,
                 metabolite_kappa=metabolite_kappa,
                 timepoint=timepoint, seed=seed)
@@ -101,7 +106,6 @@ if regenerate_simulations:
 
             sample_ids.append(sample_id)
 
-    print(list(sigmaQ))
     # generate config file
     data = {'benchmark': benchmark,
             'intervals': intervals,
@@ -119,11 +123,13 @@ if regenerate_simulations:
             'microbe_total' : microbe_total,
             'metabolite_total' : metabolite_total,
             'latent_dim' : latent_dim,
-            'sigmaQ' : list(sigmaQ),
+            'sigmaQ' : sigmaQ,
             'uU' : uU,
             'sigmaU' : sigmaU,
             'uV' : uV,
-            'sigmaV' : sigmaV
+            'sigmaV' : sigmaV,
+            'microbe_kappa': microbe_kappa,
+            'metabolite_kappa': microbe_kappa,
     }
     with open(config_file, 'w') as yfile:
         yaml.dump(data, yfile, default_flow_style=False)
@@ -175,3 +181,4 @@ else:
 print(cmd)
 proc = subprocess.Popen(cmd, shell=True)
 proc.wait()
+
