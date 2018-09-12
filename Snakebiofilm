@@ -11,11 +11,8 @@ top_OTU = config['top_OTU']
 top_MS = config['top_MS']
 reps = config['reps']
 TOOLS = config['tools']
+SAMPLES=config['samples']
 
-choice = 'abcdefghijklmnopqrstuvwxyz'
-REPLICATES = list(choice[:reps])
-SAMPLES = np.arange(intervals).astype(np.str)
-SAMPLES = list(map(lambda x: '%s_%s' % x, product(SAMPLES, REPLICATES)))
 
 
 rule all:

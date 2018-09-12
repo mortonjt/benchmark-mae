@@ -8,7 +8,7 @@ from biom import Table
 from benchmark_mae.sim import partition_microbes, partition_metabolites
 
 
-def deposit_biofilms(output_dir, table1, table2, edges, it, rep):
+def deposit_biofilms(output_dir, table1, table2, edges, sample_id):
     """ Writes down tables and edges into files.
 
     Parameters
@@ -23,26 +23,24 @@ def deposit_biofilms(output_dir, table1, table2, edges, it, rep):
         Edge list for ground truthing.
     feature_metadata : pd.DataFrame
         Dataframe of features metadata
-    it : int
-        iteration number
-    rep : int
-        repetition number
+    sample_id : str
+        sample id
     """
-    choice = 'abcdefghijklmnopqrstuvwxyz'
-    output_microbes = "%s/table_microbes.%d_%s.biom" % (
-        output_dir, it, choice[rep])
-    output_metabolites = "%s/table_metabolites.%d_%s.biom" % (
-        output_dir, it, choice[rep])
-    output_md = "%s/metadata.%d_%s.txt" % (
-        output_dir, it, choice[rep])
-    output_U = "%s/U.%d_%s.txt" % (
-        output_dir, it, choice[rep])
-    output_V = "%s/V.%d_%s.txt" % (
-        output_dir, it, choice[rep])
-    output_edges = "%s/edges.%d_%s.txt" % (
-        output_dir, it, choice[rep])
-    output_ranks = "%s/ranks.%d_%s.txt" % (
-        output_dir, it, choice[rep])
+
+    output_microbes = "%s/table_microbes.%s.biom" % (
+        output_dir, sample_id)
+    output_metabolites = "%s/table_metabolites.%s.biom" % (
+        output_dir, sample_id)
+    output_md = "%s/metadata.%s.txt" % (
+        output_dir, sample_id)
+    output_U = "%s/U.%s.txt" % (
+        output_dir, sample_id)
+    output_V = "%s/V.%s.txt" % (
+        output_dir, sample_id)
+    output_edges = "%s/edges.%s.txt" % (
+        output_dir, sample_id)
+    output_ranks = "%s/ranks.%s.txt" % (
+        output_dir, sample_id)
 
     idx1 = table1.sum(axis=0) > 0
     idx2 = table2.sum(axis=0) > 0
@@ -526,6 +524,7 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
         return y
 
     metabolites_df = metabolites_df.apply(to_intensities_f, axis=1)
+
     # ground truth edges
     edges = ground_truth_edges(microbes_df, metabolites_df)
 

@@ -13,6 +13,168 @@ import yaml
 
 
 # snakemake config
+iteration = 5
+config_file = 'params%d.yaml' % iteration
+workflow_type = 'local'
+local_cores = 1
+cores = 4
+jobs = 1
+force = True
+snakefile = 'Snakebiofilm'
+dry_run = False
+output_dir = 'cf_benchmark%d/' % iteration
+quiet=False
+keep_logger=True
+cluster_config = 'cluster.json'
+latency_wait = 120
+profile = os.path.dirname(__file__)
+restart_times = 1
+
+# simulation parameters
+regenerate_simulations = True
+
+num_metabolites = 10
+num_microbes = 10
+num_samples = 126
+
+uU = 0
+sigmaU = 1
+uV = 0
+sigmaV = 1
+latent_dim = 3
+sigmaQmin = 0.01
+sigmaQmax = 3
+
+microbe_total = 5e2
+metabolite_total = 10e8
+
+microbe_kappa = 2.5
+metabolite_kappa = 1
+
+timepoint = 9
+seed = None
+
+# benchmark parameters
+top_OTU = 20      # top OTUs to evaluate
+top_MS = 20       # top metabolites to evaluate
+
+timepoint = 9
+intervals = 2
+benchmark = 'effect_size'
+reps = 1
+tools = ['deep_mae', 'pearson', 'spearman']
+
+sigmaQ = np.linspace(sigmaQmin, sigmaQmax, intervals)
+sigmaQ = list(map(float, sigmaQ.tolist()))
+sample_ids = []
+choice = 'abcdefghijklmnopqrstuvwxyz'
+if regenerate_simulations:
+
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    else:
+        shutil.rmtree(output_dir)
+        os.mkdir(output_dir)
+
+    for i, s in enumerate(sigmaQ):
+        for r in range(reps):
+            sample_id = '%d_%s' % (s, choice[r])
+            df = cystic_fibrosis_simulation('benchmark_mae/data')
+            res = random_biofilm(
+                df, uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
+                sigmaQ=s, latent_dim=latent_dim,
+                num_microbes=num_microbes,
+                num_metabolites=num_metabolites,
+                microbe_total=microbe_total,
+                microbe_kappa=microbe_kappa,
+                metabolite_total=metabolite_total,
+                metabolite_kappa=metabolite_kappa,
+                timepoint=timepoint, seed=seed)
+            edges, microbe_counts, metabolite_counts = res
+
+            deposit_biofilms(output_dir=output_dir,
+                             table1=microbe_counts,
+                             table2=metabolite_counts,
+                             edges=edges,
+                             sample_id=sample_id
+            )
+
+            sample_ids.append(sample_id)
+
+    print(list(sigmaQ))
+    # generate config file
+    data = {'benchmark': benchmark,
+            'intervals': intervals,
+            'output_dir': output_dir,
+            'samples': list(sample_ids),
+            'reps': reps,
+            'tools': tools,
+            'top_MS': top_MS,
+            'top_OTU': top_OTU,
+            'timepoint': timepoint,
+            # parameters to simulate the model
+            'num_samples' : num_samples,
+            'num_microbes' : num_microbes,
+            'num_metabolites' : num_metabolites,
+            'microbe_total' : microbe_total,
+            'metabolite_total' : metabolite_total,
+            'latent_dim' : latent_dim,
+            'sigmaQ' : list(sigmaQ),
+            'uU' : uU,
+            'sigmaU' : sigmaU,
+            'uV' : uV,
+            'sigmaV' : sigmaV
+    }
+    with open(config_file, 'w') as yfile:
+        yaml.dump(data, yfile, default_flow_style=False)
+
+
+if workflow_type == 'local':
+    cmd = ' '.join([
+        'snakemake --verbose --nolock',
+        '--snakefile %s ' % snakefile,
+        '--local-cores %s ' % local_cores,
+        '--jobs %s ' % jobs,
+        '--configfile %s ' % config_file,
+        '--latency-wait %d' % latency_wait
+    ])
+
+elif workflow_type == 'torque':
+    eo = '-e {cluster.error} -o {cluster.output} '
+
+    cluster_setup = '\" qsub %s\
+                     -l nodes=1:ppn={cluster.n} \
+                     -l mem={cluster.mem}gb \
+                     -l walltime={cluster.time}\" ' % eo
+
+    cmd = ' '.join(['snakemake --verbose --nolock',
+                    '--snakefile %s ' % snakefile,
+                    '--local-cores %s ' % local_cores,
+                    '--cores %s ' % cores,
+                    '--jobs %s ' % jobs,
+                    '--restart-times %d' % restart_times,
+                    '--keep-going',
+                    '--cluster-config %s ' % cluster_config,
+                    '--cluster %s '  % cluster_setup,
+                    '--configfile %s ' % config_file,
+                    '--latency-wait %d' % latency_wait
+                ])
+
+elif workflow_type == "profile":
+    cmd = ' '.join(['snakemake --nolock',
+                    '--snakefile %s ' % snakefile,
+                    '--cluster-config %s ' % cluster_config,
+                    '--profile %s '  % profile,
+                    '--configfile %s ' % config_file
+                    ]
+                   )
+
+else:
+    ValueError('Incorrect workflow specified:', workflow_type)
+
+print(cmd)
+proc = subprocess.Popen(cmd, shell=True)
+proc.wait()
 iteration = 1
 config_file = 'params%d.yaml' % iteration
 workflow_type = 'local'
@@ -22,7 +184,7 @@ jobs = 1
 force = True
 snakefile = 'Snakebiofilm'
 dry_run = False
-output_dir = 'test_benchmark%d/' % iteration
+output_dir = 'cf_benchmark%d/' % iteration
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -31,10 +193,10 @@ profile = os.path.dirname(__file__)
 restart_times = 1
 
 # simulation parameters
-regenerate_simulations = False
+regenerate_simulations = True
 
-num_metabolites = 10
-num_microbes = 10
+num_metabolites = 50
+num_microbes = 20
 num_samples = 126
 
 uU = 0
@@ -50,7 +212,7 @@ metabolite_total = 10e8
 microbe_kappa = 2.5
 metabolite_kappa = 1
 
-timepoint = 9
+timepoint = 19
 seed = None
 
 # benchmark parameters

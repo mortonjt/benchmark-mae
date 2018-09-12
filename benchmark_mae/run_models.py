@@ -46,7 +46,6 @@ def load_tables(table1_file, table2_file):
     return microbes_df, metabolites_df
 
 
-
 @run_models.command()
 @click.option('--table1-file',
               help='Input biom table of abundances')
@@ -62,9 +61,9 @@ def run_deep_mae(table1_file, table2_file, output_file):
     num_samples = microbes_df.shape[0]
 
     # parameters
-    epochs = 1
-    batch_size = 100
-    learning_rate = 0.1
+    epochs = 100
+    batch_size = 5
+    learning_rate = 1e-3
     u_mean, u_scale = 0, 1
     v_mean, v_scale = 0, 1
     latent_dim = 3
@@ -80,11 +79,11 @@ def run_deep_mae(table1_file, table2_file, output_file):
 
     with tf.Graph().as_default(), tf.Session() as session:
         model = Autoencoder(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
-                            batch_size=50, latent_dim=3, dropout_rate=0.5,
-                            learning_rate=0.1, beta_1=0.999, beta_2=0.9999,
+                            batch_size=50, latent_dim=3,
+                            learning_rate=1e-3, beta_1=0.8, beta_2=0.9,
                             clipnorm=10., save_path=None)
         model(session, coo_matrix(microbes_df.values), metabolites_df.values)
-        model.fit(epoch=1000)
+        model.fit(epoch=5000)
 
         U, V = model.U, model.V
         d1 = U.shape[0]
