@@ -9,6 +9,7 @@ from skbio.stats.composition import (clr, centralize, closure,
 
 from statsmodels.sandbox.stats.multicomp import multipletests
 from scipy.stats import ttest_ind, mannwhitneyu, pearsonr, spearmanr
+from scipy.sparse import coo_matrix
 from sklearn import linear_model
 from sklearn.ensemble import RandomForestRegressor
 import tempfile
@@ -17,8 +18,9 @@ import io
 from patsy import dmatrix
 from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
-from deep_mae.multimodal import Autoencoder, onehot
 from tensorflow.contrib.distributions import Multinomial, Normal
+# note that the name will change
+from maestro.multimodal import Autoencoder
 
 import pickle
 
@@ -43,66 +45,6 @@ def load_tables(table1_file, table2_file):
         columns=train_metabolites.ids(axis='observation'))
     return microbes_df, metabolites_df
 
-
-# @run_models.command()
-# @click.option('--table1-file',
-#               help='Input biom table of abundances')
-# @click.option('--table2-file',
-#               help='Input metadata file')
-# @click.option('--output-file',
-#               help='Saved tensorflow model.')
-# def run_deep_mae(table1_file, table2_file, output_file):
-#     lam = 0
-#     dropout_rate = 0.90
-#     epochs = 10
-#     batch_size = 50
-#
-#     # careful with these parameters
-#     microbe_latent_dim = 3
-#     metabolite_latent_dim = 3
-#
-#     microbes_df, metabolites_df = load_tables(
-#         table1_file, table2_file)
-#
-#     # filter out low abundance microbes
-#     microbe_ids = microbes_df.columns
-#     metabolite_ids = metabolites_df.columns
-#
-#     # normalize the microbe and metabolite counts to sum to 1
-#     #microbes = closure(microbes_df)
-#     #metabolites = closure(metabolites_df)
-#     otu_hits, ms_hits, sample_ids = onehot(
-#         microbes_df.values, closure(metabolites_df.values))
-#     params = []
-#
-#     # model = build_model(microbes, metabolites,
-#     #                     microbe_latent_dim=microbe_latent_dim,
-#     #                     metabolite_latent_dim=metabolite_latent_dim,
-#     #                     dropout_rate=dropout_rate,
-#     #                     lam=lam)
-#     model = build_model(
-#         microbes_df, metabolites_df,
-#         latent_dim=microbe_latent_dim, lam=lam,
-#         dropout_rate=0.9
-#     )
-#
-#     model.fit(
-#         {
-#             'otu_input': otu_hits,
-#         },
-#         {
-#             'ms_output': ms_hits
-#         },
-#         verbose=0,
-#         #callbacks=[tbCallBack],
-#         epochs=epochs, batch_size=batch_size)
-#
-#     weights = model.get_weights()
-#     U, V = weights[0], weights[1]
-#     ranks = U @ V
-#     ranks = pd.DataFrame(ranks, index=microbe_ids,
-#                          columns=metabolite_ids)
-#     ranks.to_csv(output_file, sep='\t')
 
 
 @run_models.command()
@@ -141,7 +83,7 @@ def run_deep_mae(table1_file, table2_file, output_file):
                             batch_size=50, latent_dim=3, dropout_rate=0.5,
                             learning_rate=0.1, beta_1=0.999, beta_2=0.9999,
                             clipnorm=10., save_path=None)
-        model(session, microbes_df.values, metabolites_df.values)
+        model(session, coo_matrix(microbes_df.values), metabolites_df.values)
         model.fit(epoch=1000)
 
         U, V = model.U, model.V
@@ -158,9 +100,9 @@ def run_deep_mae(table1_file, table2_file, output_file):
 
         ranks = pd.DataFrame(
             clr(softmax(np.hstack(
-                (np.zeros((model.U.shape[0], 1)), U_ @ V_)))).T,
-            index=train_microbes_df.columns,
-            columns=train_metabolites_df.columns)
+                (np.zeros((model.U.shape[0], 1)), U_ @ V_)))),
+            index=microbes_df.columns,
+            columns=metabolites_df.columns)
 
         ranks.to_csv(output_file, sep='\t')
 

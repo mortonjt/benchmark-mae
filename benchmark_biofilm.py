@@ -5,8 +5,10 @@ import numpy as np
 import pandas as pd
 from biom.util import biom_open
 from benchmark_mae.generators import (
-    deposit, random_biofilm
+    deposit, deposit_biofilms, random_biofilm
 )
+from benchmark_mae.sim import cystic_fibrosis_simulation
+
 import yaml
 
 
@@ -31,8 +33,8 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = False
 
-num_metabolites = 50
-num_microbes = 20
+num_metabolites = 10
+num_microbes = 10
 num_samples = 126
 
 uU = 0
@@ -56,7 +58,7 @@ top_OTU = 20      # top OTUs to evaluate
 top_MS = 20       # top metabolites to evaluate
 
 timepoint = 9
-intervals = 3
+intervals = 1
 benchmark = 'effect_size'
 reps = 1
 tools = ['deep_mae', 'pearson', 'spearman']
@@ -71,8 +73,8 @@ if regenerate_simulations:
         os.mkdir(output_dir)
 
     for r in range(reps):
-        sample_id = i
-        ef = np.round(ef, decimals=2)
+        sample_id = r
+        df = cystic_fibrosis_simulation('benchmark_mae/data')
         res = random_biofilm(
             df, uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
             sigmaQ=sigmaQ, latent_dim=latent_dim,
@@ -83,16 +85,16 @@ if regenerate_simulations:
             metabolite_total=metabolite_total,
             metabolite_kappa=metabolite_kappa,
             timepoint=timepoint, seed=seed)
-        edges, U, V, microbe_counts, metabolite_counts = res
+        edges, microbe_counts, metabolite_counts = res
 
-        # setup metadata
-        X = pd.DataFrame(X, index=microbe_counts.index,
-                         columns=['X%d' % d for d in range(X.shape[1])])
-        metadata = X
-        metadata['effect_size'] = ef
-        deposit(microbe_counts, metabolite_counts,
-                metadata, U, V, edges,
-                sample_id, r, output_dir)
+        deposit_biofilms(output_dir=output_dir,
+                         table1=microbe_counts,
+                         table2=metabolite_counts,
+                         edges=edges,
+                         it=sample_id,
+                         rep=r
+        )
+
         sample_ids.append(sample_id)
 
     # generate config file
@@ -111,14 +113,11 @@ if regenerate_simulations:
             'microbe_total' : microbe_total,
             'metabolite_total' : metabolite_total,
             'latent_dim' : latent_dim,
-            'sigmaB' : sigmaB,
             'sigmaQ' : sigmaQ,
             'uU' : uU,
             'sigmaU' : sigmaU,
             'uV' : uV,
-            'sigmaV' : sigmaV,
-            'low' : low,
-            'high' : high,
+            'sigmaV' : sigmaV
     }
     with open(config_file, 'w') as yfile:
         yaml.dump(data, yfile, default_flow_style=False)

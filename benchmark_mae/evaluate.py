@@ -167,6 +167,7 @@ def aggregate_summaries(confusion_matrix_files, metadata_files,
 
 
 def edge_roc_curve(ranks_file, edges_file, output_file):
+
     ranks = pd.read_table(ranks_file, index_col=0)
     k_max = min(ranks.shape)
     edges = pd.read_table(edges_file, index_col=0)

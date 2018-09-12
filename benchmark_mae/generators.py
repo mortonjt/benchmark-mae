@@ -5,12 +5,11 @@ from sklearn.utils import check_random_state
 from skbio.stats.composition import clr_inv as softmax
 from biom.util import biom_open
 from biom import Table
-from sim import (partition_microbes, partition_metabolites,
-                 cystic_fibrosis_simulation)
+from benchmark_mae.sim import partition_microbes, partition_metabolites
 
 
-def deposit(output_dir, table1, table2, metadata, U, V, edges, it, rep):
-    """ Writes down tables, metadata and feature metadata into files.
+def deposit_biofilms(output_dir, table1, table2, edges, it, rep):
+    """ Writes down tables and edges into files.
 
     Parameters
     ----------
@@ -20,12 +19,6 @@ def deposit(output_dir, table1, table2, metadata, U, V, edges, it, rep):
         Biom table
     table2 : biom.Table
         Biom table
-    metadata : pd.DataFrame
-        Dataframe of sample metadata
-    U : np.array
-        Microbial latent variables
-    V : np.array
-        Metabolite latent variables
     edges : list
         Edge list for ground truthing.
     feature_metadata : pd.DataFrame
@@ -64,6 +57,64 @@ def deposit(output_dir, table1, table2, metadata, U, V, edges, it, rep):
     with biom_open(output_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
+    pd.DataFrame(edges).to_csv(output_edges, sep='\t')
+
+
+def deposit(output_dir, table1, table2, metadata, U, V, B, it, rep):
+    """ Writes down tables, metadata and feature metadata into files.
+
+    Parameters
+    ----------
+    output_dir : str
+        output directory
+    table1 : biom.Table
+        Biom table
+    table2 : biom.Table
+        Biom table
+    metadata : pd.DataFrame
+        Dataframe of sample metadata
+    U : np.array
+        Microbial latent variables
+    V : np.array
+        Metabolite latent variables
+    edges : list
+        Edge list for ground truthing.
+    feature_metadata : pd.DataFrame
+        Dataframe of features metadata
+    it : int
+        iteration number
+    rep : int
+        repetition number
+    """
+    choice = 'abcdefghijklmnopqrstuvwxyz'
+    output_microbes = "%s/table_microbes.%d_%s.biom" % (
+        output_dir, it, choice[rep])
+    output_metabolites = "%s/table_metabolites.%d_%s.biom" % (
+        output_dir, it, choice[rep])
+    output_md = "%s/metadata.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_U = "%s/U.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_V = "%s/V.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_B = "%s/B.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_ranks = "%s/ranks.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+
+    idx1 = table1.sum(axis=0) > 0
+    idx2 = table2.sum(axis=0) > 0
+    table1 = table1.loc[:, idx1]
+    table2 = table2.loc[:, idx2]
+
+    table1 = Table(table1.values.T, table1.columns, table1.index)
+    table2 = Table(table2.values.T, table2.columns, table2.index)
+
+    with biom_open(output_microbes, 'w') as f:
+        table1.to_hdf5(f, generated_by='moi1')
+    with biom_open(output_metabolites, 'w') as f:
+        table2.to_hdf5(f, generated_by='moi2')
+
     ranks = (U @ V)
     ranks = ranks[idx1, :]
     ranks = ranks[:, idx2]
@@ -73,7 +124,7 @@ def deposit(output_dir, table1, table2, metadata, U, V, edges, it, rep):
     ranks.to_csv(output_ranks, sep='\t')
     metadata.to_csv(output_md, sep='\t', index_label='#SampleID')
 
-    pd.DataFrame(edges).to_csv(output_edges, sep='\t')
+    B.to_csv(output_B, sep='\t')
     np.savetxt(output_U, U)
     np.savetxt(output_V, V)
 
@@ -454,6 +505,9 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     microbes_df = pd.concat(odfs, axis=1)
     metabolites_df = pd.concat(mdfs, axis=1)
+    sids = ['sample_%d' % i for i in range(microbes_df.shape[0])]
+    microbes_df.index = sids
+    metabolites_df.index = sids
 
     # Convert microbial abundances to counts
     def to_counts_f(x):
@@ -473,8 +527,6 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     metabolites_df = metabolites_df.apply(to_intensities_f, axis=1)
     # ground truth edges
-    edges = ground_truth_edges(microbe_df, metabolite_df)
+    edges = ground_truth_edges(microbes_df, metabolites_df)
 
-    return edges, U, V, microbes_df, metabolites_df
-
-
+    return edges, microbes_df, metabolites_df
