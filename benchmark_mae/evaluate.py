@@ -3,6 +3,7 @@ import pandas as pd
 from os.path import basename, splitext
 import numpy as np
 from scipy.stats import spearmanr
+from maestro.util import rank_hits
 
 
 def rank_accuracy(res, exp, top_N):
@@ -163,3 +164,86 @@ def aggregate_summaries(confusion_matrix_files, metadata_files,
     cats = pd.DataFrame(x, index=index_names, columns=[axis])
     merged_stats = pd.merge(merged_stats, cats, left_index=True, right_index=True)
     merged_stats.to_csv(output_file, sep='\t')
+
+
+def edge_roc_curve(ranks_file, edges_file, k_max=10):
+    ranks = pd.read_table(ranks_file, index_col=0)
+    edges = pd.read_table(edges_file, index_col=0)
+    return _edge_roc_curve(ranks, edges, k_max)
+
+
+def _edge_roc_curve(ranks, edges, k_max=10):
+    """ Create a ROC curve based on nearest neighbors.
+
+    Parameters
+    ----------
+    ranks : pd.DataFrame
+        Estimate microbe-metabolite ranks.
+    edges : pd.DataFrame
+        List of ground truth edges. Note that this data frame
+        must have the columns 'microbe', 'metabolite', 'direction'.
+    k_high : int
+        Maximum number of nearest neighbors to evaluate.
+
+    Returns
+    -------
+    pos_results : pd.DataFrame
+        TP : np.array
+            List of True positives for each k
+        TN : np.array
+            List of True negatives for each k
+        FP : np.array
+            List of False positives for each k
+        FN : np.array
+            List of False negatives for each k
+    neg_results : pd.DataFrame
+        TP : np.array
+            List of True positives for each k
+        TN : np.array
+            List of True negatives for each k
+        FP : np.array
+            List of False positives for each k
+        FN : np.array
+            List of False negatives for each k
+    """
+
+    all_edges = set(map(tuple, edges[['microbe', 'metabolite']].values))
+
+    pos_results = []
+    neg_results = []
+
+    idx = np.arange(0, k_max+1)
+    for k in idx:
+        res_pos_edges = rank_hits(ranks, k, pos=True)
+        res_neg_edges = rank_hits(ranks, k, pos=False)
+
+        exp_pos_edges = edges.loc[edges.direction==1]
+        exp_neg_edges = edges.loc[edges.direction==-1]
+
+        exp_pos_edges = set(map(tuple, exp_pos_edges[['microbe', 'metabolite']].values))
+        exp_neg_edges = set(map(tuple, exp_neg_edges[['microbe', 'metabolite']].values))
+
+        res_pos_edges = set(map(tuple, res_pos_edges[['src', 'dest']].values))
+        res_neg_edges = set(map(tuple, res_neg_edges[['src', 'dest']].values))
+
+        # take an intersection of all of the positive edges
+        TP = len(exp_pos_edges & res_pos_edges)
+        TN = len((all_edges - exp_pos_edges) & (all_edges - res_pos_edges))
+        FP = len(res_pos_edges - exp_pos_edges)
+        FN = len(exp_pos_edges - res_pos_edges)
+        pos_results.append({'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN})
+
+        # take an intersection of all of the negative edges
+        TP = len(exp_neg_edges & res_neg_edges)
+        TN = len((all_edges - exp_pos_edges) & (all_edges - res_pos_edges))
+        FP = len(res_neg_edges - exp_neg_edges)
+        FN = len(exp_neg_edges - res_neg_edges)
+        neg_results.append({'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN})
+
+    pos_results = pd.DataFrame(pos_results, index=idx)
+    neg_results = pd.DataFrame(neg_results, index=idx)
+    return pos_results, neg_results
+
+
+
+

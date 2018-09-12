@@ -5,6 +5,8 @@ from sklearn.utils import check_random_state
 from skbio.stats.composition import clr_inv as softmax
 from biom.util import biom_open
 from biom import Table
+from sim import (partition_microbes, partition_metabolites,
+                 cystic_fibrosis_simulation)
 
 
 def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
@@ -268,3 +270,118 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     #     raise ValueError('Unobserved metabolites')
 
     return microbe_counts, metabolite_counts, X, beta, U, V
+
+
+def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
+                   num_microbes, num_metabolites, latent_dim,
+                   microbe_total, microbe_kappa,
+                   metabolite_total, metabolite_kappa,
+                   timepoint, seed=0):
+    """ Generate random biofilm simulation.
+
+    Parameters
+    ----------
+    uU : float
+       Mean of microbial input projection coefficient distribution
+    sigmaU : float
+       Standard deviation of microbial input projection
+       coefficient distribution
+    uV : float
+       Mean of metabolite output projection coefficient distribution
+    sigmaV : float
+       Standard deviation of metabolite output projection
+       coefficient distribution
+    sigmaQ : float
+       Standard deviation of error distribution
+    num_microbes : int
+        Number of strains to be represented per microbe
+    num_metabolites : int
+        Number of chemicals to be represented per metabolite
+    microbe_total : int
+        Mean total abundance per microbe sample
+    microbe_kappa : float
+        Dispersion factor for microbes
+    metabolite_total : float
+        Mean total intensity per metabolite sample
+    metabolite_kappa : float
+        Dispersion factor for metabolites
+    timepoint : int
+        The timepoint to analyze.
+    seed : float
+       Random seed
+
+    Returns
+    -------
+    edges : list of tuple
+        Edge list of microbes and metabolites specifying the direction of
+        interaction.  For instance (x, y, -1) would specify a negative
+        correlation between microbe x, metabolite y.  (x, y, 1) would
+        specify a positive correlation between microbe x and metabolite y.
+    microbes_df : pd.DataFrame
+        Microbial counts.
+    metabolites_df : pd.DataFrame
+        Metabolite intensities.
+    """
+    state = check_random_state(seed)
+    # Note : this is hard coded
+    pairs = [('theta_p', ['P', 'SA']),
+             ('theta_f', ['F', 'SG', 'I'])]
+
+    odfs = []
+    mdfs = []
+
+    table = df.loc[df.time==timepoint]
+    for otu, spectra in pairs:
+
+        # partition the microbes
+        microbes_out = partition_microbes(
+            num_microbes, sigmaQ, table[otu].values, state)
+
+        # partition the metabolites
+        for ms in spectra:
+            probs, metabolites_out = partition_metabolites(
+                uU, sigmaU, uV, sigmaV,
+                num_microbes, num_metabolites,
+                latent_dim,
+                microbes_out,
+                table[ms].values,
+                state
+            )
+            metabolites_df = pd.DataFrame(
+                metabolites_out,
+                columns=['%s_%d' % (ms, i)
+                         for i in range(metabolites_out.shape[1])]
+            )
+            mdfs.append(metabolites_df)
+
+        microbes_df = pd.DataFrame(
+            microbes_out,
+            columns=['%s_%d' % (otu, i)
+                     for i in range(microbes_out.shape[1])]
+        )
+        odfs.append(microbes_df)
+
+    microbes_df = pd.concat(odfs, axis=1)
+    metabolites_df = pd.concat(mdfs, axis=1)
+
+    # Convert microbial abundances to counts
+    def to_counts_f(x):
+        #n = state.poisson(np.random.lognormal(np.log(microbe_total), microbe_kappa))
+        n = microbe_total
+        p = x / x.sum()
+        return state.poisson(state.lognormal(np.log(n*p), microbe_kappa))
+
+    microbes_df = microbes_df.apply(to_counts_f, axis=1)
+
+    # Convert metabolite abundances to intensities
+    def to_intensities_f(x):
+        #n = state.lognormal(np.log(metabolite_total), metabolite_kappa)
+        n = metabolite_total
+        p = x / x.sum()
+        y = state.lognormal(np.log(n*p), metabolite_kappa)
+        y[y<.1] = 0
+        return y
+
+    metabolites_df = metabolites_df.apply(to_intensities_f, axis=1)
+
+    return microbes_df, metabolites_df
