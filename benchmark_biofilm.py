@@ -13,11 +13,11 @@ import yaml
 
 
 # snakemake config
-iteration = 5
+iteration = 1
 config_file = 'params%d.yaml' % iteration
 workflow_type = 'local'
 local_cores = 1
-cores = 4
+cores = 35
 jobs = 1
 force = True
 snakefile = 'Snakebiofilm'
@@ -33,8 +33,8 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = True
 
-num_metabolites = 10
-num_microbes = 10
+num_metabolites = 50
+num_microbes = 100
 num_samples = 126
 
 uU = 0
@@ -45,7 +45,7 @@ latent_dim = 3
 sigmaQmin = 0.01
 sigmaQmax = 3
 
-microbe_total = 5e2
+microbe_total = 10e2
 metabolite_total = 10e8
 
 microbe_kappa = 2.5
@@ -61,7 +61,7 @@ top_MS = 20       # top metabolites to evaluate
 timepoint = 9
 intervals = 2
 benchmark = 'effect_size'
-reps = 1
+reps = 3
 tools = ['deep_mae', 'pearson', 'spearman']
 
 sigmaQ = np.linspace(sigmaQmin, sigmaQmax, intervals)
