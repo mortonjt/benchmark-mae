@@ -166,10 +166,14 @@ def aggregate_summaries(confusion_matrix_files, metadata_files,
     merged_stats.to_csv(output_file, sep='\t')
 
 
-def edge_roc_curve(ranks_file, edges_file, k_max=10):
+def edge_roc_curve(ranks_file, edges_file, output_file):
     ranks = pd.read_table(ranks_file, index_col=0)
+    k_max = min(ranks.shape)
     edges = pd.read_table(edges_file, index_col=0)
-    return _edge_roc_curve(ranks, edges, k_max)
+    pos, neg =  _edge_roc_curve(ranks, edges, k_max)
+    df = pd.merge(pos, neg, left_index=True, right_index=True,
+                  suffixes=('pos', 'neg'))
+    df.to_csv(output_file, sep='\t')
 
 
 def _edge_roc_curve(ranks, edges, k_max=10):
@@ -206,7 +210,6 @@ def _edge_roc_curve(ranks, edges, k_max=10):
         FN : np.array
             List of False negatives for each k
     """
-
     all_edges = set(map(tuple, edges[['microbe', 'metabolite']].values))
 
     pos_results = []
@@ -220,11 +223,15 @@ def _edge_roc_curve(ranks, edges, k_max=10):
         exp_pos_edges = edges.loc[edges.direction==1]
         exp_neg_edges = edges.loc[edges.direction==-1]
 
-        exp_pos_edges = set(map(tuple, exp_pos_edges[['microbe', 'metabolite']].values))
-        exp_neg_edges = set(map(tuple, exp_neg_edges[['microbe', 'metabolite']].values))
+        exp_pos_edges = set(
+            map(tuple, exp_pos_edges[['microbe', 'metabolite']].values))
+        exp_neg_edges = set(
+            map(tuple, exp_neg_edges[['microbe', 'metabolite']].values))
 
-        res_pos_edges = set(map(tuple, res_pos_edges[['src', 'dest']].values))
-        res_neg_edges = set(map(tuple, res_neg_edges[['src', 'dest']].values))
+        res_pos_edges = set(
+            map(tuple, res_pos_edges[['src', 'dest']].values))
+        res_neg_edges = set(
+            map(tuple, res_neg_edges[['src', 'dest']].values))
 
         # take an intersection of all of the positive edges
         TP = len(exp_pos_edges & res_pos_edges)

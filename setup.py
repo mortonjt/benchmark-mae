@@ -85,8 +85,7 @@ setup(name='benchmark-mae',
           'statsmodels>=0.8.0',
           'biom-format',
           'seaborn',
-          'tensorflow',
-          'edward'
+          'tensorflow'
       ],
       classifiers=classifiers,
       package_data={

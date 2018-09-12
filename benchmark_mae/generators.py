@@ -9,7 +9,76 @@ from sim import (partition_microbes, partition_metabolites,
                  cystic_fibrosis_simulation)
 
 
-def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
+def deposit(output_dir, table1, table2, metadata, U, V, edges, it, rep):
+    """ Writes down tables, metadata and feature metadata into files.
+
+    Parameters
+    ----------
+    output_dir : str
+        output directory
+    table1 : biom.Table
+        Biom table
+    table2 : biom.Table
+        Biom table
+    metadata : pd.DataFrame
+        Dataframe of sample metadata
+    U : np.array
+        Microbial latent variables
+    V : np.array
+        Metabolite latent variables
+    edges : list
+        Edge list for ground truthing.
+    feature_metadata : pd.DataFrame
+        Dataframe of features metadata
+    it : int
+        iteration number
+    rep : int
+        repetition number
+    """
+    choice = 'abcdefghijklmnopqrstuvwxyz'
+    output_microbes = "%s/table_microbes.%d_%s.biom" % (
+        output_dir, it, choice[rep])
+    output_metabolites = "%s/table_metabolites.%d_%s.biom" % (
+        output_dir, it, choice[rep])
+    output_md = "%s/metadata.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_U = "%s/U.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_V = "%s/V.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_edges = "%s/edges.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_ranks = "%s/ranks.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+
+    idx1 = table1.sum(axis=0) > 0
+    idx2 = table2.sum(axis=0) > 0
+    table1 = table1.loc[:, idx1]
+    table2 = table2.loc[:, idx2]
+
+    table1 = Table(table1.values.T, table1.columns, table1.index)
+    table2 = Table(table2.values.T, table2.columns, table2.index)
+
+    with biom_open(output_microbes, 'w') as f:
+        table1.to_hdf5(f, generated_by='moi1')
+    with biom_open(output_metabolites, 'w') as f:
+        table2.to_hdf5(f, generated_by='moi2')
+
+    ranks = (U @ V)
+    ranks = ranks[idx1, :]
+    ranks = ranks[:, idx2]
+    ranks = pd.DataFrame(
+        ranks, index=table1.ids(axis='observation'),
+        columns=table2.ids(axis='observation'))
+    ranks.to_csv(output_ranks, sep='\t')
+    metadata.to_csv(output_md, sep='\t', index_label='#SampleID')
+
+    pd.DataFrame(edges).to_csv(output_edges, sep='\t')
+    np.savetxt(output_U, U)
+    np.savetxt(output_V, V)
+
+
+def deposit_biofilm(table1, table2, metadata, U, V, edges, it, rep, output_dir):
     """ Writes down tables, metadata and feature metadata into files.
 
     Parameters
@@ -38,7 +107,7 @@ def deposit(table1, table2, metadata, U, V, B, it, rep, output_dir):
         output_dir, it, choice[rep])
     output_V = "%s/V.%d_%s.txt" % (
         output_dir, it, choice[rep])
-    output_B = "%s/B.%d_%s.txt" % (
+    output_B = "%s/edges.%d_%s.txt" % (
         output_dir, it, choice[rep])
     output_ranks = "%s/ranks.%d_%s.txt" % (
         output_dir, it, choice[rep])
@@ -272,6 +341,27 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     return microbe_counts, metabolite_counts, X, beta, U, V
 
 
+def ground_truth_edges(microbe_df, metabolite_df):
+    """ Hard coded example of edges. """
+    interactions = {('theta_f', 'SG'): 1,
+                    ('theta_f', 'F'): 1,
+                    ('theta_f', 'I'): -1,
+                    ('theta_p', 'SA'): 1,
+                    ('theta_p', 'P'): 1}
+    strains = list(map(lambda x: '_'.join(x.split('_')[:-1]), microbe_df.columns))
+    chemicals = list(map(lambda x: '_'.join(x.split('_')[:-1]), metabolite_df.columns))
+    edges = []
+    for i, otu in enumerate(strains):
+        for j, ms in enumerate(chemicals):
+            if (otu, ms) not in interactions.keys():
+                edges.append((microbe_df.columns[i], metabolite_df.columns[j], 0))
+            else:
+                direction = interactions[(otu, ms)]
+                edges.append((microbe_df.columns[i], metabolite_df.columns[j], direction))
+    edges = pd.DataFrame(edges, columns=['microbe', 'metabolite', 'direction'])
+    return edges
+
+
 def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
                    num_microbes, num_metabolites, latent_dim,
                    microbe_total, microbe_kappa,
@@ -329,6 +419,7 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     odfs = []
     mdfs = []
+    edges = []
 
     table = df.loc[df.time==timepoint]
     for otu, spectra in pairs:
@@ -339,7 +430,7 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
         # partition the metabolites
         for ms in spectra:
-            probs, metabolites_out = partition_metabolites(
+            U, V, metabolites_out = partition_metabolites(
                 uU, sigmaU, uV, sigmaV,
                 num_microbes, num_metabolites,
                 latent_dim,
@@ -366,7 +457,6 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     # Convert microbial abundances to counts
     def to_counts_f(x):
-        #n = state.poisson(np.random.lognormal(np.log(microbe_total), microbe_kappa))
         n = microbe_total
         p = x / x.sum()
         return state.poisson(state.lognormal(np.log(n*p), microbe_kappa))
@@ -375,7 +465,6 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     # Convert metabolite abundances to intensities
     def to_intensities_f(x):
-        #n = state.lognormal(np.log(metabolite_total), metabolite_kappa)
         n = metabolite_total
         p = x / x.sum()
         y = state.lognormal(np.log(n*p), metabolite_kappa)
@@ -383,5 +472,9 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
         return y
 
     metabolites_df = metabolites_df.apply(to_intensities_f, axis=1)
+    # ground truth edges
+    edges = ground_truth_edges(microbe_df, metabolite_df)
 
-    return microbes_df, metabolites_df
+    return edges, U, V, microbes_df, metabolites_df
+
+

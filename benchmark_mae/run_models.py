@@ -137,14 +137,30 @@ def run_deep_mae(table1_file, table2_file, output_file):
     params = []
 
     with tf.Graph().as_default(), tf.Session() as session:
+        model = Autoencoder(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
+                            batch_size=50, latent_dim=3, dropout_rate=0.5,
+                            learning_rate=0.1, beta_1=0.999, beta_2=0.9999,
+                            clipnorm=10., save_path=None)
+        model(session, microbes_df.values, metabolites_df.values)
+        model.fit(epoch=1000)
 
-        model = Autoencoder(session, num_samples, d1, d2,
-                            latent_dim=latent_dim)
-        model.fit(microbes_df.values, metabolites_df.values, epoch=epochs)
-        ranks = clr(softmax(
-            np.hstack((np.zeros((d1, 1)), model.U @ model.V))))
-        ranks = pd.DataFrame(ranks, index=microbes_df.columns,
-                             columns=metabolites_df.columns)
+        U, V = model.U, model.V
+        d1 = U.shape[0]
+
+        U_ = np.hstack(
+            (np.ones((model.U.shape[0], 1)),
+             model.Ubias.reshape(-1, 1), U)
+        )
+        V_ = np.vstack(
+            (model.Vbias.reshape(1, -1),
+             np.ones((1, model.V.shape[1])), V)
+        )
+
+        ranks = pd.DataFrame(
+            clr(softmax(np.hstack(
+                (np.zeros((model.U.shape[0], 1)), U_ @ V_)))).T,
+            index=train_microbes_df.columns,
+            columns=train_metabolites_df.columns)
 
         ranks.to_csv(output_file, sep='\t')
 

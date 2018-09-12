@@ -111,8 +111,10 @@ def partition_metabolites(uU, sigmaU, uV, sigmaV,
 
     Returns
     -------
-    probs: np.array
-        Conditional probability matrix.
+    U: np.array
+        Microbial latent variables.
+    V: np.array
+        Metabolomic latent variables.
     metabolites_out: np.array
         Multiple chemical abundances.
     """
@@ -137,7 +139,7 @@ def partition_metabolites(uU, sigmaU, uV, sigmaV,
     metabolites_out = np.multiply(metabolite_partition,
                                   metabolite_in.reshape(-1, 1))
 
-    return probs, metabolites_out
+    return U, V, metabolites_out
 
 
 def cystic_fibrosis_simulation(data_dir="data"):
@@ -151,5 +153,3 @@ def cystic_fibrosis_simulation(data_dir="data"):
                       left_on=['time', 'x', 'y'],
                       right_on=['time', 'x', 'y'])
     return df
-
-
