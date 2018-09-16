@@ -8,7 +8,7 @@ from biom import Table
 from benchmark_mae.sim import partition_microbes, partition_metabolites
 
 
-def deposit_biofilms(output_dir, table1, table2, edges, sample_id):
+def deposit_biofilms(output_dir, table1, table2, edges, metadata, sample_id):
     """ Writes down tables and edges into files.
 
     Parameters
@@ -21,8 +21,8 @@ def deposit_biofilms(output_dir, table1, table2, edges, sample_id):
         Biom table
     edges : list
         Edge list for ground truthing.
-    feature_metadata : pd.DataFrame
-        Dataframe of features metadata
+    metadata : pd.DataFrame
+        Dataframe of sample metadata
     sample_id : str
         sample id
     """
@@ -56,6 +56,7 @@ def deposit_biofilms(output_dir, table1, table2, edges, sample_id):
         table2.to_hdf5(f, generated_by='moi2')
 
     pd.DataFrame(edges).to_csv(output_edges, sep='\t')
+    metadata.to_csv(output_md, sep='\t')
 
 
 def deposit(output_dir, table1, table2, metadata, U, V, B, it, rep):
@@ -411,15 +412,20 @@ def ground_truth_edges(microbe_df, metabolite_df):
     return edges
 
 
-def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
+def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
                    num_microbes, num_metabolites, latent_dim,
                    microbe_total, microbe_kappa,
+                   microbe_tau,
                    metabolite_total, metabolite_kappa,
-                   timepoint, seed=0):
+                   metabolite_tau,
+                   seed=0):
     """ Generate random biofilm simulation.
 
     Parameters
     ----------
+    table : pd.DataFrame
+       Simulated absolute abundances for microbes and metabolites
+       along with time and spatial coordinates.
     uU : float
        Mean of microbial input projection coefficient distribution
     sigmaU : float
@@ -440,12 +446,14 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
         Mean total abundance per microbe sample
     microbe_kappa : float
         Dispersion factor for microbes
+    microbe_tau : float
+        Dispersion factor for total microbial load
     metabolite_total : float
         Mean total intensity per metabolite sample
     metabolite_kappa : float
-        Dispersion factor for metabolites
-    timepoint : int
-        The timepoint to analyze.
+        Dispersion factor for individual metabolites
+    metabolite_tau : float
+        Dispersion factor for total metabolite load
     seed : float
        Random seed
 
@@ -469,8 +477,6 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
     odfs = []
     mdfs = []
     edges = []
-
-    table = df.loc[df.time==timepoint]
     for otu, spectra in pairs:
 
         # partition the microbes
@@ -503,13 +509,12 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     microbes_df = pd.concat(odfs, axis=1)
     metabolites_df = pd.concat(mdfs, axis=1)
-    sids = ['sample_%d' % i for i in range(microbes_df.shape[0])]
-    microbes_df.index = sids
-    metabolites_df.index = sids
+    microbes_df.index = table.index
+    metabolites_df.index = table.index
 
     # Convert microbial abundances to counts
     def to_counts_f(x):
-        n = microbe_total
+        n = state.lognormal(np.log(microbe_total), microbe_tau)
         p = x / x.sum()
         return state.poisson(state.lognormal(np.log(n*p), microbe_kappa))
 
@@ -517,10 +522,9 @@ def random_biofilm(df, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     # Convert metabolite abundances to intensities
     def to_intensities_f(x):
-        n = metabolite_total
-        p = x / x.sum()
+        n = state.lognormal(np.log(metabolite_total), metabolite_tau)
+        p = x / (x.sum() * table.loc[x.name, 'time'])
         y = state.lognormal(np.log(n*p), metabolite_kappa)
-        y[y<.1] = 0
         return y
 
     metabolites_df = metabolites_df.apply(to_intensities_f, axis=1)

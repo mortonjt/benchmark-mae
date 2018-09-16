@@ -13,8 +13,13 @@ import yaml
 
 
 # snakemake config
+<<<<<<< HEAD
 iteration = 1
 config_file = 'params%d.yaml' % iteration
+=======
+iteration = 3
+config_file = 'test_cf_params%d.yaml' % iteration
+>>>>>>> 6f47ccdca85708733fbc93429b78132d50660027
 workflow_type = 'local'
 local_cores = 1
 cores = 35
@@ -22,7 +27,7 @@ jobs = 1
 force = True
 snakefile = 'Snakebiofilm'
 dry_run = False
-output_dir = 'cf_benchmark%d/' % iteration
+output_dir = 'test_cf_benchmark%d/' % iteration
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -33,8 +38,13 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = True
 
+<<<<<<< HEAD
 num_metabolites = 50
 num_microbes = 100
+=======
+num_metabolites = 2
+num_microbes = 2
+>>>>>>> 6f47ccdca85708733fbc93429b78132d50660027
 num_samples = 126
 
 uU = 0
@@ -42,24 +52,29 @@ sigmaU = 1
 uV = 0
 sigmaV = 1
 latent_dim = 3
-sigmaQmin = 0.01
+sigmaQmin = 1
 sigmaQmax = 3
 
 microbe_total = 10e2
 metabolite_total = 10e8
 
-microbe_kappa = 2.5
-metabolite_kappa = 1
+microbe_tau = 0.1
+metabolite_tau = 0.1
 
-timepoint = 9
+microbe_kappa = 0.1
+metabolite_kappa = 0.1
+
+min_time = 0
+max_time = 10
+min_y = 18
+max_y = 20
 seed = None
 
 # benchmark parameters
 top_OTU = 20      # top OTUs to evaluate
 top_MS = 20       # top metabolites to evaluate
 
-timepoint = 9
-intervals = 2
+intervals = 1
 benchmark = 'effect_size'
 reps = 3
 tools = ['deep_mae', 'pearson', 'spearman']
@@ -68,6 +83,21 @@ sigmaQ = np.linspace(sigmaQmin, sigmaQmax, intervals)
 sigmaQ = list(map(float, sigmaQ.tolist()))
 sample_ids = []
 choice = 'abcdefghijklmnopqrstuvwxyz'
+
+
+# retrieve absolute abundances
+df = cystic_fibrosis_simulation('benchmark_mae/data')
+table = df.loc[
+    np.logical_and(
+        np.logical_and(
+            df.y > min_y, df.y < max_y
+        ),
+        np.logical_and(
+            df.time > min_time, df.time < max_time
+        )
+    )
+]
+
 if regenerate_simulations:
 
     if not os.path.exists(output_dir):
@@ -79,29 +109,31 @@ if regenerate_simulations:
     for i, s in enumerate(sigmaQ):
         for r in range(reps):
             sample_id = '%d_%s' % (s, choice[r])
-            df = cystic_fibrosis_simulation('benchmark_mae/data')
+
             res = random_biofilm(
-                df, uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
+                table, uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
                 sigmaQ=s, latent_dim=latent_dim,
                 num_microbes=num_microbes,
                 num_metabolites=num_metabolites,
                 microbe_total=microbe_total,
                 microbe_kappa=microbe_kappa,
+                microbe_tau=microbe_tau,
                 metabolite_total=metabolite_total,
                 metabolite_kappa=metabolite_kappa,
-                timepoint=timepoint, seed=seed)
+                metabolite_tau=metabolite_tau,
+                seed=seed)
             edges, microbe_counts, metabolite_counts = res
 
             deposit_biofilms(output_dir=output_dir,
                              table1=microbe_counts,
                              table2=metabolite_counts,
                              edges=edges,
+                             metadata=table,
                              sample_id=sample_id
             )
 
             sample_ids.append(sample_id)
 
-    print(list(sigmaQ))
     # generate config file
     data = {'benchmark': benchmark,
             'intervals': intervals,
@@ -111,7 +143,10 @@ if regenerate_simulations:
             'tools': tools,
             'top_MS': top_MS,
             'top_OTU': top_OTU,
-            'timepoint': timepoint,
+            'min_y': min_y,
+            'max_y': max_y,
+            'min_time': min_time,
+            'max_time': max_time,
             # parameters to simulate the model
             'num_samples' : num_samples,
             'num_microbes' : num_microbes,

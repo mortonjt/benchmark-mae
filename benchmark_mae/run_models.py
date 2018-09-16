@@ -16,6 +16,7 @@ import tempfile
 from subprocess import Popen
 import io
 from patsy import dmatrix
+from skbio.stats.composition import clr, centralize
 from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
 from tensorflow.contrib.distributions import Multinomial, Normal
@@ -61,12 +62,12 @@ def run_deep_mae(table1_file, table2_file, output_file):
     num_samples = microbes_df.shape[0]
 
     # parameters
-    epochs = 100
-    batch_size = 5
+    epochs = 100000
+    batch_size = 5000
     learning_rate = 1e-3
     u_mean, u_scale = 0, 1
     v_mean, v_scale = 0, 1
-    latent_dim = 3
+    latent_dim = 1
 
     # filter out low abundance microbes
     microbe_ids = microbes_df.columns
@@ -79,11 +80,11 @@ def run_deep_mae(table1_file, table2_file, output_file):
 
     with tf.Graph().as_default(), tf.Session() as session:
         model = Autoencoder(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
-                            batch_size=50, latent_dim=3,
-                            learning_rate=1e-3, beta_1=0.8, beta_2=0.9,
+                            batch_size=batch_size, latent_dim=latent_dim,
+                            learning_rate=learning_rate, beta_1=0.85, beta_2=0.9,
                             clipnorm=10., save_path=None)
         model(session, coo_matrix(microbes_df.values), metabolites_df.values)
-        model.fit(epoch=5000)
+        model.fit(epoch=epochs)
 
         U, V = model.U, model.V
         d1 = U.shape[0]
@@ -98,7 +99,7 @@ def run_deep_mae(table1_file, table2_file, output_file):
         )
 
         ranks = pd.DataFrame(
-            clr(softmax(np.hstack(
+            np.log(softmax(np.hstack(
                 (np.zeros((model.U.shape[0], 1)), U_ @ V_)))),
             index=microbes_df.columns,
             columns=metabolites_df.columns)
