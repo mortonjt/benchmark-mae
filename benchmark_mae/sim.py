@@ -152,4 +152,6 @@ def cystic_fibrosis_simulation(data_dir="data"):
         df = pd.merge(df, df_b,
                       left_on=['time', 'x', 'y'],
                       right_on=['time', 'x', 'y'])
+    sids = ['sample_%d' % i for i in range(df.shape[0])]
+    df.index = sids
     return df

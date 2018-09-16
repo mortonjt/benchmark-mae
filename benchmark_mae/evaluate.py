@@ -3,6 +3,7 @@ import pandas as pd
 from os.path import basename, splitext
 import numpy as np
 from scipy.stats import spearmanr
+from skbio.stats.composition import clr_inv
 from maestro.util import rank_hits
 
 
@@ -166,10 +167,12 @@ def aggregate_summaries(confusion_matrix_files, metadata_files,
     merged_stats.to_csv(output_file, sep='\t')
 
 
-def edge_roc_curve(ranks_file, edges_file, output_file):
+def edge_roc_curve(ranks_file, edges_file, output_file, k_max = None):
 
     ranks = pd.read_table(ranks_file, index_col=0)
-    k_max = min(ranks.shape)
+    ranks = ranks.apply(clr_inv, axis=1)
+    if k_max is None:
+        k_max = min(ranks.shape)
     edges = pd.read_table(edges_file, index_col=0)
     pos, neg =  _edge_roc_curve(ranks, edges, k_max)
     df = pd.merge(pos, neg, left_index=True, right_index=True,
@@ -218,16 +221,16 @@ def _edge_roc_curve(ranks, edges, k_max=10):
 
     idx = np.arange(0, k_max+1)
     for k in idx:
-        res_pos_edges = rank_hits(ranks, k, pos=True)
-        res_neg_edges = rank_hits(ranks, k, pos=False)
+        res_pos_edges = rank_hits(ranks.T, k, pos=True)
+        res_neg_edges = rank_hits(ranks.T, k, pos=False)
 
         exp_pos_edges = edges.loc[edges.direction==1]
         exp_neg_edges = edges.loc[edges.direction==-1]
 
         exp_pos_edges = set(
-            map(tuple, exp_pos_edges[['microbe', 'metabolite']].values))
+            map(tuple, exp_pos_edges[['metabolite', 'microbe']].values))
         exp_neg_edges = set(
-            map(tuple, exp_neg_edges[['microbe', 'metabolite']].values))
+            map(tuple, exp_neg_edges[['metabolite', 'microbe']].values))
 
         res_pos_edges = set(
             map(tuple, res_pos_edges[['src', 'dest']].values))

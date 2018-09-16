@@ -13,7 +13,7 @@ import yaml
 
 
 # snakemake config
-iteration = 5
+iteration = 6
 config_file = 'params%d.yaml' % iteration
 workflow_type = 'local'
 local_cores = 1
@@ -33,21 +33,21 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = True
 
-num_metabolites = 10
-num_microbes = 10
+num_metabolites = 5
+num_microbes = 5
 num_samples = 126
 
 uU = 0
 sigmaU = 1
 uV = 0
 sigmaV = 1
-latent_dim = 3
+latent_dim = 1
 sigmaQ = 1
 
-microbe_total = 10e2
+microbe_total = 5e2
 metabolite_total = 10e8
 
-microbe_kappa_min = 0.1
+microbe_kappa_min = 3
 microbe_kappa_max = 3
 metabolite_kappa = 1
 
@@ -59,10 +59,10 @@ top_OTU = 20      # top OTUs to evaluate
 top_MS = 20       # top metabolites to evaluate
 
 timepoint = 9
-intervals = 2
+intervals = 1
 benchmark = 'effect_size'
 reps = 1
-tools = [#'deep_mae',
+tools = ['deep_mae',
          'pearson', 'spearman']
 
 microbe_kappa = list(map(float, np.linspace(
