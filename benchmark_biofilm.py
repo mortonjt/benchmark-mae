@@ -13,21 +13,17 @@ import yaml
 
 
 # snakemake config
-<<<<<<< HEAD
-iteration = 1
-config_file = 'params%d.yaml' % iteration
-=======
+iteration = 8
+config_file = 'effect_params%d.yaml' % iteration
 iteration = 3
-config_file = 'test_cf_params%d.yaml' % iteration
->>>>>>> 6f47ccdca85708733fbc93429b78132d50660027
-workflow_type = 'local'
+workflow_type = 'jobarray'
 local_cores = 1
 cores = 35
 jobs = 1
 force = True
 snakefile = 'Snakebiofilm'
 dry_run = False
-output_dir = 'test_cf_benchmark%d/' % iteration
+output_dir = 'effect_size_norm_benchmark%d/' % iteration
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -38,13 +34,8 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = True
 
-<<<<<<< HEAD
 num_metabolites = 50
 num_microbes = 100
-=======
-num_metabolites = 2
-num_microbes = 2
->>>>>>> 6f47ccdca85708733fbc93429b78132d50660027
 num_samples = 126
 
 uU = 0
@@ -55,7 +46,7 @@ latent_dim = 3
 sigmaQmin = 1
 sigmaQmax = 3
 
-microbe_total = 10e2
+microbe_total = 5e2
 metabolite_total = 10e8
 
 microbe_tau = 0.1
@@ -65,8 +56,8 @@ microbe_kappa = 0.1
 metabolite_kappa = 0.1
 
 min_time = 0
-max_time = 10
-min_y = 18
+max_time = 9
+min_y = 15
 max_y = 20
 seed = None
 
@@ -90,10 +81,10 @@ df = cystic_fibrosis_simulation('benchmark_mae/data')
 table = df.loc[
     np.logical_and(
         np.logical_and(
-            df.y > min_y, df.y < max_y
+            df.y >= min_y, df.y <= max_y
         ),
         np.logical_and(
-            df.time > min_time, df.time < max_time
+            df.time >= min_time, df.time < max_time
         )
     )
 ]
@@ -203,10 +194,14 @@ elif workflow_type == "profile":
                     '--configfile %s ' % config_file
                     ]
                    )
+elif workflow_type == 'jobarray':
+    from jobarray import jobarray_cmd
+    cmd = ' '.join(jobarray_cmd(output_dir, sample_ids, tools, 
+                                'sampleids', concurrent_jobs=jobs))
+    
 
 else:
     ValueError('Incorrect workflow specified:', workflow_type)
-
 print(cmd)
 proc = subprocess.Popen(cmd, shell=True)
 proc.wait()
