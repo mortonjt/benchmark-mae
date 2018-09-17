@@ -511,7 +511,7 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
         for ms in spectra:
             U, V, metabolites_out = partition_metabolites(
                 uU, sigmaU, uV, sigmaV,
-                num_microbes, num_metabolites,
+                num_metabolites,
                 latent_dim,
                 microbes_out,
                 table[ms].values,
