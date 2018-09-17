@@ -62,8 +62,8 @@ def run_deep_mae(table1_file, table2_file, output_file):
     num_samples = microbes_df.shape[0]
 
     # parameters
-    epochs = 10000
-    batch_size = 500
+    epochs = 100000
+    batch_size = 5000
     learning_rate = 1e-3
     u_mean, u_scale = 0, 1
     v_mean, v_scale = 0, 1
@@ -119,8 +119,6 @@ def run_pearson(table1_file, table2_file, output_file):
         table1_file, table2_file)
     n, d1 = microbes_df.shape
     n, d2 = metabolites_df.shape
-    microbes_df = microbes_df.apply(lambda x: x/x.sum(), axis=1)
-    metabolites_df = metabolites_df.apply(lambda x: x/x.sum(), axis=1)
 
     pearson_res = np.zeros((d1, d2))
     for i in range(d1):
@@ -147,8 +145,6 @@ def run_spearman(table1_file, table2_file, output_file):
         table1_file, table2_file)
     n, d1 = microbes_df.shape
     n, d2 = metabolites_df.shape
-    microbes_df = microbes_df.apply(lambda x: x/x.sum(), axis=1)
-    metabolites_df = metabolites_df.apply(lambda x: x/x.sum(), axis=1)
 
     pearson_res = np.zeros((d1, d2))
     for i in range(d1):

@@ -2,7 +2,7 @@ import os
 import glob
 import numpy as np
 import pandas as pd
-from skbio.stats.composition import ilr_inv
+from skbio.stats.composition import ilr_inv, closure
 from skbio.stats.composition import clr_inv as softmax
 
 
@@ -86,8 +86,8 @@ def partition_microbes(num_microbes, sigmaQ, microbe_in, state):
 
 
 def partition_metabolites(uU, sigmaU, uV, sigmaV,
-                          num_microbes, num_metabolites,
-                          latent_dim, microbe_partition,
+                          num_metabolites, latent_dim,
+                          microbe_partition,
                           metabolite_in, state):
     """ Split up a single chemical abundances into multiple subspecies.
 
@@ -118,7 +118,7 @@ def partition_metabolites(uU, sigmaU, uV, sigmaV,
     metabolites_out: np.array
         Multiple chemical abundances.
     """
-
+    num_microbes = microbe_partition.shape[1]
     num_samples = len(metabolite_in)
 
     U = state.normal(
@@ -133,7 +133,7 @@ def partition_metabolites(uU, sigmaU, uV, sigmaV,
     probs = softmax(U @ V)
 
     # for each submicrobe strain, generate metabolite distribution
-    metabolite_partition = microbe_partition @ probs
+    metabolite_partition = closure(microbe_partition @ probs)
 
     # Return partitioned metabolites
     metabolites_out = np.multiply(metabolite_partition,

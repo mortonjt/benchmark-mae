@@ -8,17 +8,24 @@ from biom import Table
 from benchmark_mae.sim import partition_microbes, partition_metabolites
 
 
-def deposit_biofilms(output_dir, table1, table2, edges, metadata, sample_id):
+def deposit_biofilms(output_dir,
+                     abs_table1, abs_table2,
+                     rel_table1, rel_table2,
+                     edges, metadata, sample_id):
     """ Writes down tables and edges into files.
 
     Parameters
     ----------
     output_dir : str
         output directory
-    table1 : biom.Table
-        Biom table
-    table2 : biom.Table
-        Biom table
+    rel_table1 : biom.Table
+        Biom table of relative abundances
+    rel_table2 : biom.Table
+        Biom table of relative abundances
+    abs_table1 : biom.Table
+        Biom table of absolute abundances
+    abs_table2 : biom.Table
+        Biom table of absolute abundances
     edges : list
         Edge list for ground truthing.
     metadata : pd.DataFrame
@@ -26,10 +33,13 @@ def deposit_biofilms(output_dir, table1, table2, edges, metadata, sample_id):
     sample_id : str
         sample id
     """
-
-    output_microbes = "%s/table_microbes.%s.biom" % (
+    output_abs_microbes = "%s/table.abs.microbes.%s.biom" % (
         output_dir, sample_id)
-    output_metabolites = "%s/table_metabolites.%s.biom" % (
+    output_abs_metabolites = "%s/table.abs.metabolites.%s.biom" % (
+        output_dir, sample_id)
+    output_rel_microbes = "%s/table.rel.microbes.%s.biom" % (
+        output_dir, sample_id)
+    output_rel_metabolites = "%s/table.rel.metabolites.%s.biom" % (
         output_dir, sample_id)
     output_md = "%s/metadata.%s.txt" % (
         output_dir, sample_id)
@@ -42,17 +52,25 @@ def deposit_biofilms(output_dir, table1, table2, edges, metadata, sample_id):
     output_ranks = "%s/ranks.%s.txt" % (
         output_dir, sample_id)
 
-    idx1 = table1.sum(axis=0) > 0
-    idx2 = table2.sum(axis=0) > 0
-    table1 = table1.loc[:, idx1]
-    table2 = table2.loc[:, idx2]
+    # idx1 = table1.sum(axis=0) > 0
+    # idx2 = table2.sum(axis=0) > 0
+    # table1 = table1.loc[:, idx1]
+    # table2 = table2.loc[:, idx2]
 
-    table1 = Table(table1.values.T, table1.columns, table1.index)
-    table2 = Table(table2.values.T, table2.columns, table2.index)
-
-    with biom_open(output_microbes, 'w') as f:
+    # relative abundances
+    table1 = Table(rel_table1.values.T, rel_table1.columns, rel_table1.index)
+    table2 = Table(rel_table2.values.T, rel_table2.columns, rel_table2.index)
+    with biom_open(output_rel_microbes, 'w') as f:
         table1.to_hdf5(f, generated_by='moi1')
-    with biom_open(output_metabolites, 'w') as f:
+    with biom_open(output_rel_metabolites, 'w') as f:
+        table2.to_hdf5(f, generated_by='moi2')
+
+    # absolute abundances
+    table1 = Table(abs_table1.values.T, abs_table1.columns, abs_table1.index)
+    table2 = Table(abs_table2.values.T, abs_table2.columns, abs_table2.index)
+    with biom_open(output_abs_microbes, 'w') as f:
+        table1.to_hdf5(f, generated_by='moi1')
+    with biom_open(output_abs_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
     pd.DataFrame(edges).to_csv(output_edges, sep='\t')
@@ -464,11 +482,16 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
         interaction.  For instance (x, y, -1) would specify a negative
         correlation between microbe x, metabolite y.  (x, y, 1) would
         specify a positive correlation between microbe x and metabolite y.
-    microbes_df : pd.DataFrame
-        Microbial counts.
-    metabolites_df : pd.DataFrame
-        Metabolite intensities.
+    abs_microbes_df : pd.DataFrame
+        Relative microbial counts.
+    abs_metabolites_df : pd.DataFrame
+        Relative metabolite intensities.
+    rel_microbes_df : pd.DataFrame
+        Relative microbial counts.
+    rel_metabolites_df : pd.DataFrame
+        Relative metabolite intensities.
     """
+    print('table shape', table.shape)
     state = check_random_state(seed)
     # Note : this is hard coded
     pairs = [('theta_p', ['P', 'SA']),
@@ -481,7 +504,8 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
 
         # partition the microbes
         microbes_out = partition_microbes(
-            num_microbes, sigmaQ, table[otu].values, state)
+            num_microbes, sigmaQ, table[otu].values, state
+        )
 
         # partition the metabolites
         for ms in spectra:
@@ -507,29 +531,28 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
         )
         odfs.append(microbes_df)
 
-    microbes_df = pd.concat(odfs, axis=1)
-    metabolites_df = pd.concat(mdfs, axis=1)
-    microbes_df.index = table.index
-    metabolites_df.index = table.index
+    abs_microbes_df = pd.concat(odfs, axis=1)
+    abs_metabolites_df = pd.concat(mdfs, axis=1)
+    abs_microbes_df.index = table.index
+    abs_metabolites_df.index = table.index
 
     # Convert microbial abundances to counts
     def to_counts_f(x):
         n = state.lognormal(np.log(microbe_total), microbe_tau)
         p = x / x.sum()
         return state.poisson(state.lognormal(np.log(n*p), microbe_kappa))
-
-    microbes_df = microbes_df.apply(to_counts_f, axis=1)
+    rel_microbes_df = abs_microbes_df.apply(to_counts_f, axis=1)
 
     # Convert metabolite abundances to intensities
     def to_intensities_f(x):
         n = state.lognormal(np.log(metabolite_total), metabolite_tau)
-        p = x / (x.sum() * table.loc[x.name, 'time'])
+        p = x / x.sum()
         y = state.lognormal(np.log(n*p), metabolite_kappa)
         return y
-
-    metabolites_df = metabolites_df.apply(to_intensities_f, axis=1)
+    rel_metabolites_df = abs_metabolites_df.apply(to_intensities_f, axis=1)
 
     # ground truth edges
     edges = ground_truth_edges(microbes_df, metabolites_df)
 
-    return edges, microbes_df, metabolites_df
+    return (edges, abs_microbes_df, abs_metabolites_df,
+            rel_microbes_df, rel_metabolites_df)

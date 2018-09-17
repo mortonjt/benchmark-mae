@@ -14,16 +14,16 @@ import yaml
 
 # snakemake config
 iteration = 8
-config_file = 'effect_params%d.yaml' % iteration
 iteration = 3
-workflow_type = 'jobarray'
+workflow_type = 'local'
 local_cores = 1
 cores = 35
 jobs = 1
 force = True
 snakefile = 'Snakebiofilm'
 dry_run = False
-output_dir = 'effect_size_norm_benchmark%d/' % iteration
+output_dir = 'test_effect_size_benchmark%d/' % iteration
+config_file = output_dir + 'test_effect_params%d.yaml' % iteration
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -34,8 +34,8 @@ restart_times = 1
 # simulation parameters
 regenerate_simulations = True
 
-num_metabolites = 50
-num_microbes = 100
+num_metabolites = 2
+num_microbes = 2
 num_samples = 126
 
 uU = 0
@@ -67,8 +67,9 @@ top_MS = 20       # top metabolites to evaluate
 
 intervals = 1
 benchmark = 'effect_size'
-reps = 3
+reps = 1
 tools = ['deep_mae', 'pearson', 'spearman']
+modes = ['abs', 'rel']
 
 sigmaQ = np.linspace(sigmaQmin, sigmaQmax, intervals)
 sigmaQ = list(map(float, sigmaQ.tolist()))
@@ -102,7 +103,8 @@ if regenerate_simulations:
             sample_id = '%d_%s' % (s, choice[r])
 
             res = random_biofilm(
-                table, uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
+                table,
+                uU=uU, sigmaU=sigmaU, uV=uV, sigmaV=sigmaV,
                 sigmaQ=s, latent_dim=latent_dim,
                 num_microbes=num_microbes,
                 num_metabolites=num_metabolites,
@@ -113,43 +115,50 @@ if regenerate_simulations:
                 metabolite_kappa=metabolite_kappa,
                 metabolite_tau=metabolite_tau,
                 seed=seed)
-            edges, microbe_counts, metabolite_counts = res
 
+            (edges,
+             abs_microbe_counts, abs_metabolite_counts,
+             rel_microbe_counts, rel_metabolite_counts) = res
+
+            metadata = table
             deposit_biofilms(output_dir=output_dir,
-                             table1=microbe_counts,
-                             table2=metabolite_counts,
+                             abs_table1=abs_microbe_counts,
+                             abs_table2=abs_metabolite_counts,
+                             rel_table1=rel_microbe_counts,
+                             rel_table2=rel_metabolite_counts,
                              edges=edges,
-                             metadata=table,
+                             metadata=metadata,
                              sample_id=sample_id
             )
-
             sample_ids.append(sample_id)
 
     # generate config file
-    data = {'benchmark': benchmark,
-            'intervals': intervals,
-            'output_dir': output_dir,
-            'samples': list(sample_ids),
-            'reps': reps,
-            'tools': tools,
-            'top_MS': top_MS,
-            'top_OTU': top_OTU,
-            'min_y': min_y,
-            'max_y': max_y,
-            'min_time': min_time,
-            'max_time': max_time,
-            # parameters to simulate the model
-            'num_samples' : num_samples,
-            'num_microbes' : num_microbes,
-            'num_metabolites' : num_metabolites,
-            'microbe_total' : microbe_total,
-            'metabolite_total' : metabolite_total,
-            'latent_dim' : latent_dim,
-            'sigmaQ' : list(sigmaQ),
-            'uU' : uU,
-            'sigmaU' : sigmaU,
-            'uV' : uV,
-            'sigmaV' : sigmaV
+    data = {
+        'benchmark': benchmark,
+        'intervals': intervals,
+        'output_dir': output_dir,
+        'samples': list(sample_ids),
+        'reps': reps,
+        'tools': tools,
+        'modes': modes,
+        'top_MS': top_MS,
+        'top_OTU': top_OTU,
+        'min_y': min_y,
+        'max_y': max_y,
+        'min_time': min_time,
+        'max_time': max_time,
+        # parameters to simulate the model
+        'num_samples' : num_samples,
+        'num_microbes' : num_microbes,
+        'num_metabolites' : num_metabolites,
+        'microbe_total' : microbe_total,
+        'metabolite_total' : metabolite_total,
+        'latent_dim' : latent_dim,
+        'sigmaQ' : list(sigmaQ),
+        'uU' : uU,
+        'sigmaU' : sigmaU,
+        'uV' : uV,
+        'sigmaV' : sigmaV
     }
     with open(config_file, 'w') as yfile:
         yaml.dump(data, yfile, default_flow_style=False)
@@ -196,9 +205,9 @@ elif workflow_type == "profile":
                    )
 elif workflow_type == 'jobarray':
     from jobarray import jobarray_cmd
-    cmd = ' '.join(jobarray_cmd(output_dir, sample_ids, tools, 
+    cmd = ' '.join(jobarray_cmd(output_dir, sample_ids, tools,
                                 'sampleids', concurrent_jobs=jobs))
-    
+
 
 else:
     ValueError('Incorrect workflow specified:', workflow_type)

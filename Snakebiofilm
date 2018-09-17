@@ -11,22 +11,24 @@ top_OTU = config['top_OTU']
 top_MS = config['top_MS']
 reps = config['reps']
 TOOLS = config['tools']
-SAMPLES=config['samples']
-
+SAMPLES = config['samples']
+MODES = config['modes']
 
 
 rule all:
     input:
-        expand(output_dir + "{tool}.{sample}.summary",
-               tool=TOOLS, sample=SAMPLES),
+        expand(
+            output_dir + "{tool}.{mode}.{sample}.summary",
+               tool=TOOLS, mode=MODES, sample=SAMPLES
+        )
 
 
 rule run_tool:
     input:
-        microbes = output_dir + "table_microbes.{sample}.biom",
-        metabolites = output_dir + "table_metabolites.{sample}.biom",
+        microbes = output_dir + "table.{mode}.microbes.{sample}.biom",
+        metabolites = output_dir + "table.{mode}.metabolites.{sample}.biom",
     output:
-        output_dir + "{tool}.{sample}.results"
+        output_dir + "{tool}.{mode}.{sample}.results",
     run:
         shell("""
         run_models.py run_{wildcards.tool} \
@@ -38,13 +40,10 @@ rule run_tool:
 
 rule summarize:
     input:
-        # ranks = expand(output_dir + "{tool}.{sample}.results",
-        #                tool=TOOLS, sample=SAMPLES),
-        # edges = expand(output_dir + "edges.{sample}.txt", sample=SAMPLES),
-        ranks = output_dir + "{tool}.{sample}.results",
+        ranks = output_dir + "{tool}.{mode}.{sample}.results",
         edges = output_dir + "edges.{sample}.txt",
     output:
-        output_dir + "{tool}.{sample}.summary"
+        output_dir + "{tool}.{mode}.{sample}.summary",
     run:
         from benchmark_mae.evaluate import edge_roc_curve
         edge_roc_curve(input.ranks, input.edges, output[0])
