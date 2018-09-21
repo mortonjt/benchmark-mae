@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.utils import check_random_state
 from skbio.stats.composition import clr_inv as softmax
+from skbio.stats.composition import ilr_inv, clr
 from biom.util import biom_open
 from biom import Table
 from benchmark_mae.sim import partition_microbes, partition_metabolites
@@ -132,7 +133,8 @@ def deposit(output_dir, table1, table2, metadata, U, V, B, it, rep):
     with biom_open(output_metabolites, 'w') as f:
         table2.to_hdf5(f, generated_by='moi2')
 
-    ranks = (U @ V)
+    ranks = clr(softmax(np.hstack(
+        (np.zeros((U.shape[0], 1)), U @ V))))
     ranks = ranks[idx1, :]
     ranks = ranks[:, idx2]
     ranks = pd.DataFrame(
@@ -141,7 +143,7 @@ def deposit(output_dir, table1, table2, metadata, U, V, B, it, rep):
     ranks.to_csv(output_ranks, sep='\t')
     metadata.to_csv(output_md, sep='\t', index_label='#SampleID')
 
-    B.to_csv(output_B, sep='\t')
+    np.savetxt(output_B, B)
     np.savetxt(output_U, U)
     np.savetxt(output_V, V)
 
@@ -313,12 +315,13 @@ def random_sigmoid_multimodal(
     return microbe_counts, metabolite_counts, X, Q, U1, U2, V1, V2
 
 
+
 def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
                       latent_dim=3, low=-1, high=1,
                       microbe_total=10, metabolite_total=100,
                       uB=0, sigmaB=2, sigmaQ=0.1,
                       uU=0, sigmaU=1, uV=0, sigmaV=1,
-                      kappa=1, seed=0):
+                      seed=0):
     """
     Parameters
     ----------
@@ -367,28 +370,46 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     state = check_random_state(seed)
     # only have two coefficients
     beta = state.normal(uB, sigmaB, size=(2, num_microbes))
-
     X = np.vstack((np.ones(num_samples),
                    np.linspace(low, high, num_samples))).T
 
     microbes = softmax(state.normal(X @ beta, sigmaQ))
 
-    U = state.normal(
-        uU, sigmaU, size=(num_microbes, latent_dim))
-    V = state.normal(
-        uV, sigmaV, size=(latent_dim, num_metabolites))
+    #microbes = softmax(
+    #    state.normal(loc=0, scale=sigmaQ,
+    #                 size=(num_samples, num_microbes)
+    #                )
+    #)
 
-    probs = softmax(U @ V)
+    microbes = ilr_inv(state.multivariate_normal(
+        mean=np.zeros(num_microbes-1), cov=np.diag([sigmaQ]*(num_microbes-1)),
+        size=num_samples)
+    )
+    Umain = state.normal(
+        uU, sigmaU, size=(num_microbes, latent_dim))
+    Vmain = state.normal(
+        uV, sigmaV, size=(latent_dim, num_metabolites-1))
+
+    Ubias = state.normal(
+        uU, sigmaU, size=(num_microbes, 1))
+    Vbias = state.normal(
+        uV, sigmaV, size=(1, num_metabolites-1))
+
+    U_ = np.hstack(
+        (np.ones((num_microbes, 1)), Ubias, Umain))
+    V_ = np.vstack(
+        (Vbias, np.ones((1, num_metabolites-1)), Vmain))
+
+    phi = np.hstack((np.zeros((num_microbes, 1)), U_ @ V_))
+    probs = softmax(phi)
     microbe_counts = np.zeros((num_samples, num_microbes))
     metabolite_counts = np.zeros((num_samples, num_metabolites))
     n1 = microbe_total
     n2 = metabolite_total // microbe_total
     for n in range(num_samples):
-        N1 = np.random.poisson(np.random.lognormal(n1, kappa))
-        otu = np.random.multinomial(N1, microbes[n, :])
+        otu = np.random.multinomial(n1, microbes[n, :])
         for i in range(num_microbes):
-            N2 = np.random.poisson(np.random.lognormal(otu[i] * n2, kappa))
-            ms = np.random.multinomial(N2, probs[i, :])
+            ms = np.random.multinomial(otu[i] * n2, probs[i, :])
             metabolite_counts[n, :] += ms
         microbe_counts[n, :] += otu
 
@@ -401,12 +422,7 @@ def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
     metabolite_counts = pd.DataFrame(
         metabolite_counts, index=sample_ids, columns=ms_ids)
 
-    # if np.any(microbe_counts.sum(axis=1) == 0):
-    #     raise ValueError('Unobserved OTUs')
-    # if np.any(metabolites_counts.sum(axis=1) == 0):
-    #     raise ValueError('Unobserved metabolites')
-
-    return microbe_counts, metabolite_counts, X, beta, U, V
+    return microbe_counts, metabolite_counts, X, beta, U_, V_
 
 
 def ground_truth_edges(microbe_df, metabolite_df):
@@ -491,7 +507,6 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
     rel_metabolites_df : pd.DataFrame
         Relative metabolite intensities.
     """
-    print('table shape', table.shape)
     state = check_random_state(seed)
     # Note : this is hard coded
     pairs = [('theta_p', ['P', 'SA']),

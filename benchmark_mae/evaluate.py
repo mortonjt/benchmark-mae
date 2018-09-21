@@ -4,7 +4,7 @@ from os.path import basename, splitext
 import numpy as np
 from scipy.stats import spearmanr
 from skbio.stats.composition import clr_inv
-from maestro.util import rank_hits
+from minstrel.util import rank_hits
 
 
 def rank_accuracy(res, exp, top_N):
@@ -180,7 +180,7 @@ def edge_roc_curve(ranks_file, edges_file, output_file, k_max = None):
     df.to_csv(output_file, sep='\t')
 
 
-def _edge_roc_curve(ranks, edges, k_max=10):
+def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
     """ Create a ROC curve based on nearest neighbors.
 
     Parameters
@@ -221,8 +221,27 @@ def _edge_roc_curve(ranks, edges, k_max=10):
 
     idx = np.arange(0, k_max+1)
     for k in idx:
-        res_pos_edges = rank_hits(ranks.T, k, pos=True)
-        res_neg_edges = rank_hits(ranks.T, k, pos=False)
+        if axis == 1:
+            res_pos_edges = rank_hits(ranks, k, pos=True)
+            res_neg_edges = rank_hits(ranks, k, pos=False)
+
+            res_pos_edges = res_pos_edges.rename(
+                columns={'src': 'metabolite', 'dest': 'microbe'}
+            )
+            res_neg_edges = res_neg_edges.rename(
+                columns={'src': 'metabolite', 'dest': 'microbe'}
+            )
+        else:
+            res_pos_edges = rank_hits(ranks.T, k, pos=True)
+            res_neg_edges = rank_hits(ranks.T, k, pos=False)
+
+            res_pos_edges = res_pos_edges.rename(
+                columns={'dest': 'metabolite', 'src': 'microbe'}
+            )
+            res_neg_edges = res_neg_edges.rename(
+                columns={'dest': 'metabolite', 'src': 'microbe'}
+            )
+
 
         exp_pos_edges = edges.loc[edges.direction==1]
         exp_neg_edges = edges.loc[edges.direction==-1]
@@ -233,9 +252,9 @@ def _edge_roc_curve(ranks, edges, k_max=10):
             map(tuple, exp_neg_edges[['metabolite', 'microbe']].values))
 
         res_pos_edges = set(
-            map(tuple, res_pos_edges[['src', 'dest']].values))
+            map(tuple, res_pos_edges[['metabolite', 'microbe']].values))
         res_neg_edges = set(
-            map(tuple, res_neg_edges[['src', 'dest']].values))
+            map(tuple, res_neg_edges[['metabolite', 'microbe']].values))
 
         # take an intersection of all of the positive edges
         TP = len(exp_pos_edges & res_pos_edges)
@@ -246,7 +265,7 @@ def _edge_roc_curve(ranks, edges, k_max=10):
 
         # take an intersection of all of the negative edges
         TP = len(exp_neg_edges & res_neg_edges)
-        TN = len((all_edges - exp_pos_edges) & (all_edges - res_pos_edges))
+        TN = len((all_edges - exp_neg_edges) & (all_edges - res_neg_edges))
         FP = len(res_neg_edges - exp_neg_edges)
         FN = len(exp_neg_edges - res_neg_edges)
         neg_results.append({'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN})

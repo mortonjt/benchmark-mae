@@ -21,7 +21,7 @@ from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
 from tensorflow.contrib.distributions import Multinomial, Normal
 # note that the name will change
-from maestro.multimodal import Autoencoder
+from minstrel.multimodal import Autoencoder
 
 import pickle
 
