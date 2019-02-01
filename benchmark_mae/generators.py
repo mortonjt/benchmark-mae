@@ -9,6 +9,7 @@ from biom import Table
 from benchmark_mae.sim import partition_microbes, partition_metabolites
 
 
+# utility functions for saving files
 def deposit_biofilms(output_dir,
                      abs_table1, abs_table2,
                      rel_table1, rel_table2,
@@ -211,6 +212,25 @@ def deposit_biofilm(table1, table2, metadata, U, V, edges, it, rep, output_dir):
     np.savetxt(output_B, B)
 
 
+def deposit_blocktable(output_dir, table, groups, truth, it, rep):
+    choice = 'abcdefghijklmnopqrstuvwxyz'
+    output_table = "%s/table.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_groups = "%s/groups.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+    output_truth = "%s/truth.%d_%s.txt" % (
+        output_dir, it, choice[rep])
+
+    output_table, output_groups, output_truth
+    t = Table(table.T.values, table.columns.values, table.index.values)
+    with biom_open(output_table, 'w') as f:
+        t.to_hdf5(f, generated_by='moi')
+    groups.to_csv(output_groups, sep='\t')
+    with open(output_truth, 'w') as f:
+        f.write(','.join(truth))
+
+
+# This is for multiomics benchmarks
 def random_sigmoid_multimodal(
         num_microbes=20, num_metabolites=100, num_samples=100,
         num_latent_microbes=5, num_latent_metabolites=10,
@@ -220,7 +240,8 @@ def random_sigmoid_multimodal(
         uU1=0, sigmaU1=1, uU2=0, sigmaU2=1,
         uV1=0, sigmaV1=1, uV2=0, sigmaV2=1,
         seed=0):
-    """
+    """ Simulates sigmoid function for microbe-metabolite interations.
+
     Parameters
     ----------
     num_microbes : int
@@ -571,3 +592,117 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
 
     return (edges, abs_microbes_df, abs_metabolites_df,
             rel_microbes_df, rel_metabolites_df)
+
+
+# This is for differential abundance benchmarks
+def generate_block_table(reps, n_species_class1, n_species_class2,
+                         n_species_shared, effect_size,
+                         lam, n_contaminants,
+                         library_size=10000, template=None):
+    """ Differential abundance analysis benchmarks
+
+    Parameters
+    ----------
+    reps : int
+        Number of replicate samples per test.
+    n_species_class1 : int
+        Number of species changing in class1.
+    n_species_class2 : int
+        Number of species changing in class2.
+    n_species_shared: int
+        Number of species shared between classes.
+    effect_size : int
+        The effect size difference between the feature abundances.
+    n_contaminants : int
+       Number of contaminant species.
+    lam : float
+       Decay constant for contaminant urn (assumes that the contaminant urn
+       follows an exponential distribution).
+    library_size : np.array
+        A vector specifying the library sizes per sample.
+    template : np.array
+        A vector specifying feature abundances or relative proportions.
+
+    Returns
+    -------
+    generator of
+        pd.DataFrame
+           Ground truth tables.
+        pd.DataFrame
+           Metadata group categories, n_diff and effect_size
+        pd.Series
+           Species actually differentially abundant.
+    """
+    data = []
+    metadata = []
+
+    n_species = n_species_class1 + n_species_class2 + n_species_shared
+
+    if template is None:
+        for _ in range(reps):
+            data.append([effect_size]*n_species_class1 +
+                        [1]*(n_species_class2+n_species_shared))
+        metadata += [0]
+
+        for _ in range(reps):
+            data.append([1]*(n_species_class1+n_species_shared) +
+                        [effect_size]*n_species_class2)
+        metadata += [1]
+
+    else:
+        # randomly shuffle template
+        template = np.random.permutation(template)
+
+        # pad with zeros to make sure that the template is large enough
+        if len(template) < n_species:
+            z = np.zeros(n_species - len(template))
+            template = np.concatenate((template, z))
+        else:
+            template = template[:n_species]
+
+        # add pseudocount to give remaining entries a non-zero probability of
+        # being observed
+        template = template + 1
+
+        for _ in range(reps):
+            data.append(np.concatenate(
+                (effect_size*template[:n_species_class1],
+                 template[n_species_class1:]), axis=0))
+            metadata += [0]
+
+        for _ in range(reps):
+            data.append(np.concatenate(
+                (template[:-n_species_class2],
+                 effect_size*template[-n_species_class2:]),axis=0))
+            metadata += [1]
+
+    data = closure(np.vstack(data))
+    x = np.linspace(0, 1, n_contaminants)
+    contaminant_urn = closure(expon.pdf(x, scale=lam))
+    contaminant_urns = np.repeat(np.expand_dims(contaminant_urn, axis=0),
+                                 data.shape[0], axis=0)
+
+    data = np.hstack((data, contaminant_urns))
+    s_ids = ['F%d' % i for i in range(n_species)]
+    c_ids = ['X%d' % i for i in range(n_contaminants)]
+    data = closure(data)
+
+    metadata = pd.DataFrame({'group': metadata})
+    metadata['n_diff'] = n_species_class1 + n_species_class2
+    metadata['effect_size'] = effect_size
+    metadata['library_size'] = library_size
+    metadata.index = ['S%d' % i for i in range(len(metadata.index))]
+    table = pd.DataFrame(data)
+
+    table.index = ['S%d' % i for i in range(len(table.index))]
+    table.columns = s_ids + c_ids
+
+    if n_species_class2 != 0:
+      ground_truth = (list(s_ids[:n_species_class1]) +
+                      list(s_ids[-n_species_class2:]))
+    else:
+      ground_truth = (list(s_ids[:n_species_class1]))
+
+    return table, metadata, ground_truth
+
+
