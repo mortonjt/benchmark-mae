@@ -3,10 +3,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.utils import check_random_state
 from skbio.stats.composition import clr_inv as softmax
-from skbio.stats.composition import ilr_inv, clr
+from skbio.stats.composition import ilr_inv, clr, closure
 from biom.util import biom_open
 from biom import Table
 from benchmark_mae.sim import partition_microbes, partition_metabolites
+from scipy.stats import norm, expon
 
 
 # utility functions for saving files
@@ -212,20 +213,30 @@ def deposit_biofilm(table1, table2, metadata, U, V, edges, it, rep, output_dir):
     np.savetxt(output_B, B)
 
 
-def deposit_blocktable(output_dir, table, groups, truth, it, rep):
+def deposit_blocktable(output_dir, abs_table, rel_table, metadata, truth, it, rep):
     choice = 'abcdefghijklmnopqrstuvwxyz'
-    output_table = "%s/table.%d_%s.txt" % (
+    output_abstable = "%s/rel_table.%d_%s.biom" % (
         output_dir, it, choice[rep])
-    output_groups = "%s/groups.%d_%s.txt" % (
+    output_reltable = "%s/abs_table.%d_%s.biom" % (
+        output_dir, it, choice[rep])
+    output_metadata = "%s/metadata.%d_%s.txt" % (
         output_dir, it, choice[rep])
     output_truth = "%s/truth.%d_%s.txt" % (
         output_dir, it, choice[rep])
 
-    output_table, output_groups, output_truth
-    t = Table(table.T.values, table.columns.values, table.index.values)
-    with biom_open(output_table, 'w') as f:
-        t.to_hdf5(f, generated_by='moi')
-    groups.to_csv(output_groups, sep='\t')
+    abs_t = Table(abs_table.T.values,
+                  abs_table.columns.values,
+                  abs_table.index.values)
+    with biom_open(output_abstable, 'w') as f:
+        abs_t.to_hdf5(f, generated_by='moi')
+
+    rel_t = Table(rel_table.T.values,
+                  rel_table.columns.values,
+                  rel_table.index.values)
+    with biom_open(output_reltable, 'w') as f:
+        rel_t.to_hdf5(f, generated_by='moi')
+
+    metadata.to_csv(output_metadata, sep='\t')
     with open(output_truth, 'w') as f:
         f.write(','.join(truth))
 
@@ -334,7 +345,6 @@ def random_sigmoid_multimodal(
         metabolite_counts, index=sample_ids, columns=ms_ids)
 
     return microbe_counts, metabolite_counts, X, Q, U1, U2, V1, V2
-
 
 
 def random_multimodal(num_microbes=20, num_metabolites=100, num_samples=100,
@@ -567,17 +577,12 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
         )
         odfs.append(microbes_df)
 
-    abs_microbes_df = pd.concat(odfs, axis=1)
-    abs_metabolites_df = pd.concat(mdfs, axis=1)
-    abs_microbes_df.index = table.index
-    abs_metabolites_df.index = table.index
-
+    ## Helper functions
     # Convert microbial abundances to counts
     def to_counts_f(x):
         n = state.lognormal(np.log(microbe_total), microbe_tau)
         p = x / x.sum()
         return state.poisson(state.lognormal(np.log(n*p), microbe_kappa))
-    rel_microbes_df = abs_microbes_df.apply(to_counts_f, axis=1)
 
     # Convert metabolite abundances to intensities
     def to_intensities_f(x):
@@ -585,6 +590,13 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
         p = x / x.sum()
         y = state.lognormal(np.log(n*p), metabolite_kappa)
         return y
+
+    abs_microbes_df = pd.concat(odfs, axis=1)
+    abs_metabolites_df = pd.concat(mdfs, axis=1)
+    abs_microbes_df.index = table.index
+    abs_metabolites_df.index = table.index
+
+    rel_microbes_df = abs_microbes_df.apply(to_counts_f, axis=1)
     rel_metabolites_df = abs_metabolites_df.apply(to_intensities_f, axis=1)
 
     # ground truth edges
@@ -595,11 +607,20 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
 
 
 # This is for differential abundance benchmarks
-def generate_block_table(reps, n_species_class1, n_species_class2,
-                         n_species_shared, effect_size,
-                         lam, n_contaminants,
-                         library_size=10000, template=None):
-    """ Differential abundance analysis benchmarks
+
+def random_block_table(reps, n_species_class1, n_species_class2,
+                       n_species_shared,
+                       effect_size=1,
+                       library_size=10000,
+                       microbe_total=100000, microbe_kappa=0.3,
+                       microbe_tau=0.1, sigma=0.5, seed=None):
+    """ Differential abundance analysis benchmarks.
+
+    The simulation here consists of 3 parts
+
+    Step 1: generate class probabilities using logistic distribution
+    Step 2: generate coefficients from normal distributions
+    Step 3: generate counts from species distributions
 
     Parameters
     ----------
@@ -615,9 +636,8 @@ def generate_block_table(reps, n_species_class1, n_species_class2,
         The effect size difference between the feature abundances.
     n_contaminants : int
        Number of contaminant species.
-    lam : float
-       Decay constant for contaminant urn (assumes that the contaminant urn
-       follows an exponential distribution).
+    sigma: float
+        Logistic error variance for class probabilities
     library_size : np.array
         A vector specifying the library sizes per sample.
     template : np.array
@@ -633,76 +653,50 @@ def generate_block_table(reps, n_species_class1, n_species_class2,
         pd.Series
            Species actually differentially abundant.
     """
+    state = check_random_state(seed)
     data = []
-    metadata = []
 
+    n = reps * 2
     n_species = n_species_class1 + n_species_class2 + n_species_shared
+    k = 2
+    labels = np.array([-effect_size] * (n // 2) + [effect_size] * (n // 2))
+    eps = np.random.logistic(loc=0, scale=sigma, size=n)
+    class_probs = labels + eps
 
-    if template is None:
-        for _ in range(reps):
-            data.append([effect_size]*n_species_class1 +
-                        [1]*(n_species_class2+n_species_shared))
-        metadata += [0]
+    X = np.hstack((np.ones((n, 1)), class_probs.reshape(-1, 1)))
+    B = np.random.normal(loc=0, scale=1, size=(k, n_species))
 
-        for _ in range(reps):
-            data.append([1]*(n_species_class1+n_species_shared) +
-                        [effect_size]*n_species_class2)
-        metadata += [1]
+    ## Helper functions
+    # Convert microbial abundances to counts
+    def to_counts_f(x):
+        n = state.lognormal(np.log(library_size), microbe_tau)
+        p = x / x.sum()
+        return state.poisson(state.lognormal(np.log(n*p), microbe_kappa))
 
-    else:
-        # randomly shuffle template
-        template = np.random.permutation(template)
+    o_ids = ['F%d' % i for i in range(n_species)]
+    s_ids = ['S%d' % i for i in range(n)]
 
-        # pad with zeros to make sure that the template is large enough
-        if len(template) < n_species:
-            z = np.zeros(n_species - len(template))
-            template = np.concatenate((template, z))
-        else:
-            template = template[:n_species]
+    abs_table = pd.DataFrame(np.exp(X @ B) * microbe_total,
+                             index=s_ids,
+                             columns=o_ids)
 
-        # add pseudocount to give remaining entries a non-zero probability of
-        # being observed
-        template = template + 1
+    rel_data = np.vstack(abs_table.apply(to_counts_f, axis=1))
 
-        for _ in range(reps):
-            data.append(np.concatenate(
-                (effect_size*template[:n_species_class1],
-                 template[n_species_class1:]), axis=0))
-            metadata += [0]
+    rel_table = pd.DataFrame(rel_data,
+                             index=s_ids,
+                             columns=o_ids)
 
-        for _ in range(reps):
-            data.append(np.concatenate(
-                (template[:-n_species_class2],
-                 effect_size*template[-n_species_class2:]),axis=0))
-            metadata += [1]
-
-    data = closure(np.vstack(data))
-    x = np.linspace(0, 1, n_contaminants)
-    contaminant_urn = closure(expon.pdf(x, scale=lam))
-    contaminant_urns = np.repeat(np.expand_dims(contaminant_urn, axis=0),
-                                 data.shape[0], axis=0)
-
-    data = np.hstack((data, contaminant_urns))
-    s_ids = ['F%d' % i for i in range(n_species)]
-    c_ids = ['X%d' % i for i in range(n_contaminants)]
-    data = closure(data)
-
-    metadata = pd.DataFrame({'group': metadata})
+    metadata = pd.DataFrame({'labels': labels})
     metadata['n_diff'] = n_species_class1 + n_species_class2
     metadata['effect_size'] = effect_size
-    metadata['library_size'] = library_size
-    metadata.index = ['S%d' % i for i in range(len(metadata.index))]
-    table = pd.DataFrame(data)
+    metadata['microbe_total'] = microbe_total
+    metadata['class_logits'] = class_probs
 
-    table.index = ['S%d' % i for i in range(len(table.index))]
-    table.columns = s_ids + c_ids
+    metadata.index = s_ids
 
-    if n_species_class2 != 0:
-      ground_truth = (list(s_ids[:n_species_class1]) +
-                      list(s_ids[-n_species_class2:]))
-    else:
-      ground_truth = (list(s_ids[:n_species_class1]))
+    ground_truth = pd.DataFrame({
+        'intercept': B[0, :],
+        'categorical': B[1, :]
+    }, index=o_ids)
 
-    return table, metadata, ground_truth
-
-
+    return abs_table, rel_table, metadata, ground_truth
