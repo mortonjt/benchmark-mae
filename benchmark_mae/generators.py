@@ -237,8 +237,7 @@ def deposit_blocktable(output_dir, abs_table, rel_table, metadata, truth, it, re
         rel_t.to_hdf5(f, generated_by='moi')
 
     metadata.to_csv(output_metadata, sep='\t')
-    with open(output_truth, 'w') as f:
-        f.write(','.join(truth))
+    truth.to_csv(output_truth, sep='\t')
 
 
 # This is for multiomics benchmarks
