@@ -169,7 +169,7 @@ def run_spearman(table1_file, table2_file, output_file):
               help='Category specifying groups')
 @click.option('--output-file',
               help='output file of differientially abundance features.')
-def run_t_test(table_file, metadata_file, category, output_file):
+def run_ttest(table_file, metadata_file, category, output_file):
     metadata = pd.read_table(metadata_file, index_col=0)
     table = load_table(table_file)
     table = pd.DataFrame(np.array(table.matrix_data.todense()).T,
@@ -194,7 +194,7 @@ def run_t_test(table_file, metadata_file, category, output_file):
               help='Category specifying groups')
 @click.option('--output-file',
               help='output file of differientially abundance features.')
-def run_mann_whitney(table_file, metadata_file, category, output_file):
+def run_mannwhitney(table_file, metadata_file, category, output_file):
     metadata = pd.read_table(metadata_file, index_col=0)
     table = load_table(table_file)
     table = pd.DataFrame(np.array(table.matrix_data.todense()).T,
@@ -214,6 +214,15 @@ def run_mann_whitney(table_file, metadata_file, category, output_file):
     res.to_csv(output_file, sep='\t')
 
 
+@run_models.command()
+@click.option('--table-file',
+              help='Input biom table of abundances')
+@click.option('--metadata-file',
+              help='Input metadata file')
+@click.option('--category',
+              help='Category specifying groups')
+@click.option('--output-file',
+              help='output file of differientially abundance features.')
 def run_multinomial(table_file, metadata_file, category, output_file):
     metadata = pd.read_table(metadata_file, index_col=0)
     table = load_table(table_file)
@@ -222,8 +231,8 @@ def run_multinomial(table_file, metadata_file, category, output_file):
                          columns=table.ids(axis='observation'))
     model = MultRegression(
         batch_size=3, learning_rate=1e-3, beta_scale=1)
-    Y = np.array(self.table.matrix_data.todense()).T
-    X = self.md.values
+    Y = table.values
+    X = metadata.values
     trainX = X[:-5]
     trainY = Y[:-5]
     testX = X[-5:]

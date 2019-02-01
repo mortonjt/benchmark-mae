@@ -12,16 +12,15 @@ from benchmark_mae.sim import cystic_fibrosis_simulation
 import yaml
 
 
-iteration = 8
-iteration = 3
-workflow_type = 'local'
+iteration = 1
+workflow_type = 'jobarray'
 local_cores = 1
-cores = 3
+cores = 4
 jobs = 1
 force = True
 dry_run = False
-output_dir = 'test_effect_size_benchmark%d/' % iteration
-config_file = output_dir + 'test_effect_params%d.yaml' % iteration
+output_dir = 'test_diff_abundance_benchmark%d/' % iteration
+config_file = output_dir + 'test_diff_abundance_params%d.yaml' % iteration
 quiet=False
 keep_logger=True
 cluster_config = 'cluster.json'
@@ -59,7 +58,7 @@ top_MS = 20       # top metabolites to evaluate
 intervals = 1
 benchmark = 'effect_size'
 reps = 1
-tools = ['t_test', 'multinomial']
+tools = ['ttest', 'multinomial']
 modes = ['abs', 'rel']
 
 sample_ids = []

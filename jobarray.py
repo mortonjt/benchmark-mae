@@ -39,13 +39,13 @@ def jobarray_cmd(directory, sample_ids, tools, modes, fname, concurrent_jobs=10)
         fh.write(text)
 
     cmd = [
-        "echo \'module load python_3.5.5;",
+        "echo \' source ~/.bashrc; source activate qiime2-2019.1;",
         "cd /home/mortonjt/Documents/benchmark-mae/%s;" % directory,
         "sample=$(head -n ${PBS_ARRAYID} %s | tail -n 1 | cut -f 1);" % fname,
         "tool=$(head -n ${PBS_ARRAYID}  %s | tail -n 1 | cut -f 2);" % fname,
         "mode=$(head -n ${PBS_ARRAYID}  %s | tail -n 1 | cut -f 3);" % fname ,
-        ("echo $tool; run_models.py run_${tool} --table-file %{mode}_table.${sample}.biom "
-         "--metadata-file metadata.${sample}.txt --output-file ${tool}.${sample}.results\'"),
+        ("echo $tool; run_models.py run-${tool} --table-file ${mode}_table.${sample}.biom "
+         "--metadata-file metadata.${sample}.txt --category labels --output-file ${tool}.${sample}.results\'"),
         "| qsub -N benchmark",
         "-l nodes=1:ppn=4",
         "-l cput=72:30:00",
