@@ -16,7 +16,7 @@ import tempfile
 from subprocess import Popen
 import io
 from patsy import dmatrix
-from skbio.stats.composition import clr, centralize
+from skbio.stats.composition import clr, centralize, clr_inv
 from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
 from tensorflow.contrib.distributions import Multinomial, Normal
@@ -232,16 +232,21 @@ def run_multinomial(table_file, metadata_file, category, output_file):
     model = MultRegression(
         batch_size=3, learning_rate=1e-3, beta_scale=1)
     Y = table.values
-    X = metadata.values
+    X = metadata[['intercept', category]].values
     trainX = X[:-5]
     trainY = Y[:-5]
     testX = X[-5:]
     testY = Y[-5:]
     with tf.Graph().as_default(), tf.Session() as session:
         model(session, trainX, trainY, testX, testY)
-        loss, cv, _ = model.fit(epoch=int(50000))
+        loss, cv, _ = model.fit(epoch=int(1000))
+        beta_ = clr(
+            clr_inv(
+                np.hstack((np.zeros((model.p, 1)), model.B))
+            )
+        )
     res = pd.DataFrame(
-        model.B.T, columns=['intercept', 'statistic'],
+        beta_.T, columns=['intercept', 'statistic'],
         index=table.columns
     )
     res.to_csv(output_file, sep='\t')

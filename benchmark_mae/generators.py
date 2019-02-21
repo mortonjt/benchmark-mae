@@ -213,16 +213,16 @@ def deposit_biofilm(table1, table2, metadata, U, V, edges, it, rep, output_dir):
     np.savetxt(output_B, B)
 
 
-def deposit_blocktable(output_dir, abs_table, rel_table, metadata, truth, it, rep):
+def deposit_blocktable(output_dir, abs_table, rel_table, metadata, truth, sample_id):
     choice = 'abcdefghijklmnopqrstuvwxyz'
-    output_abstable = "%s/rel_table.%d_%s.biom" % (
-        output_dir, it, choice[rep])
-    output_reltable = "%s/abs_table.%d_%s.biom" % (
-        output_dir, it, choice[rep])
-    output_metadata = "%s/metadata.%d_%s.txt" % (
-        output_dir, it, choice[rep])
-    output_truth = "%s/truth.%d_%s.txt" % (
-        output_dir, it, choice[rep])
+    output_abstable = "%s/rel_table.%s.biom" % (
+        output_dir, sample_id)
+    output_reltable = "%s/abs_table.%s.biom" % (
+        output_dir, sample_id)
+    output_metadata = "%s/metadata.%s.txt" % (
+        output_dir, sample_id)
+    output_truth = "%s/truth.%s.txt" % (
+        output_dir, sample_id)
 
     abs_t = Table(abs_table.T.values,
                   abs_table.columns.values,
@@ -607,8 +607,9 @@ def random_biofilm(table, uU, sigmaU, uV, sigmaV, sigmaQ,
 
 # This is for differential abundance benchmarks
 
-def random_block_table(reps, n_species_class1, n_species_class2,
-                       n_species_shared,
+def random_block_table(reps, n_species,
+                       species_mean=0,
+                       species_var=1.,
                        effect_size=1,
                        library_size=10000,
                        microbe_total=100000, microbe_kappa=0.3,
@@ -625,12 +626,12 @@ def random_block_table(reps, n_species_class1, n_species_class2,
     ----------
     reps : int
         Number of replicate samples per test.
-    n_species_class1 : int
-        Number of species changing in class1.
-    n_species_class2 : int
-        Number of species changing in class2.
-    n_species_shared: int
-        Number of species shared between classes.
+    n_species : int
+        Number of species.
+    species_loc : float
+        Mean of the species prior.
+    species_variance : float
+        Variance of species log-fold differences
     effect_size : int
         The effect size difference between the feature abundances.
     n_contaminants : int
@@ -656,14 +657,13 @@ def random_block_table(reps, n_species_class1, n_species_class2,
     data = []
 
     n = reps * 2
-    n_species = n_species_class1 + n_species_class2 + n_species_shared
     k = 2
     labels = np.array([-effect_size] * (n // 2) + [effect_size] * (n // 2))
     eps = np.random.logistic(loc=0, scale=sigma, size=n)
     class_probs = labels + eps
 
     X = np.hstack((np.ones((n, 1)), class_probs.reshape(-1, 1)))
-    B = np.random.normal(loc=0, scale=1, size=(k, n_species))
+    B = np.random.normal(loc=species_mean, scale=species_var, size=(k, n_species))
 
     ## Helper functions
     # Convert microbial abundances to counts
@@ -686,11 +686,10 @@ def random_block_table(reps, n_species_class1, n_species_class2,
                              columns=o_ids)
 
     metadata = pd.DataFrame({'labels': labels})
-    metadata['n_diff'] = n_species_class1 + n_species_class2
     metadata['effect_size'] = effect_size
     metadata['microbe_total'] = microbe_total
     metadata['class_logits'] = class_probs
-
+    metadata['intercept'] = 1
     metadata.index = s_ids
 
     ground_truth = pd.DataFrame({
