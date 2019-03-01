@@ -21,7 +21,7 @@ from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
 from tensorflow.contrib.distributions import Multinomial, Normal
 # note that the name will change
-from minstrel.multimodal import Autoencoder
+from rhapsody.multimodal import MMvec
 from songbird.multinomial import MultRegression
 
 import pickle
@@ -80,10 +80,10 @@ def run_deep_mae(table1_file, table2_file, output_file):
     params = []
 
     with tf.Graph().as_default(), tf.Session() as session:
-        model = Autoencoder(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
-                            batch_size=batch_size, latent_dim=latent_dim,
-                            learning_rate=learning_rate, beta_1=0.85, beta_2=0.9,
-                            clipnorm=10., save_path=None)
+        model = MMvec(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
+                      batch_size=batch_size, latent_dim=latent_dim,
+                      learning_rate=learning_rate, beta_1=0.85, beta_2=0.9,
+                      clipnorm=10., save_path=None)
         model(session, coo_matrix(microbes_df.values), metabolites_df.values)
         model.fit(epoch=epochs)
 

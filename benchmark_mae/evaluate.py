@@ -4,7 +4,54 @@ from os.path import basename, splitext
 import numpy as np
 from scipy.stats import spearmanr
 from skbio.stats.composition import clr_inv
-from minstrel.util import rank_hits
+
+
+def rank_hits(ranks, k, pos=True):
+    """ Creates an edge list based on rank matrix.
+    Parameters
+    ----------
+    ranks : pd.DataFrame
+       Matrix of ranks (aka conditional probabilities)
+    k : int
+       Number of nearest neighbors
+    pos : bool
+       Specifies either most associated or least associated.
+       This is a proxy to positively correlated or negatively correlated.
+    Returns
+    -------
+    edges : pd.DataFrame
+       List of edges along with corresponding ranks.
+    """
+    axis = 1
+
+    def sort_f(x):
+        if pos:
+            return [
+                ranks.columns[i] for i in np.argsort(x)[-k:]
+            ]
+        else:
+            return [
+                ranks.columns[i] for i in np.argsort(x)[:k]
+            ]
+
+    idx = ranks.index
+    topk = ranks.apply(sort_f, axis=axis).values
+    topk = pd.DataFrame([x for x in topk], index=idx)
+    top_hits = topk.reset_index()
+    top_hits = top_hits.rename(columns={'index': 'src'})
+    edges = pd.melt(
+        top_hits, id_vars=['src'],
+        var_name='rank',
+        value_vars=list(range(k)),
+        value_name='dest')
+
+    # fill in actual ranks
+    for i in edges.index:
+        src = edges.loc[i, 'src']
+        dest = edges.loc[i, 'dest']
+        edges.loc[i, 'rank'] = ranks.loc[src, dest]
+    edges['rank'] = edges['rank'].astype(np.float64)
+    return edges
 
 
 def rank_accuracy(res, exp, top_N):
@@ -273,7 +320,3 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
     pos_results = pd.DataFrame(pos_results, index=idx)
     neg_results = pd.DataFrame(neg_results, index=idx)
     return pos_results, neg_results
-
-
-
-
