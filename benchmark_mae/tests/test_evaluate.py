@@ -1,8 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
-from evaluate import _edge_roc_curve
-from maestro.util import rank_hits
+from benchmark_mae.evaluate import rank_hits, _edge_roc_curve
 import pandas.util.testing as pdt
 
 

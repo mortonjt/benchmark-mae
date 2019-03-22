@@ -4,7 +4,56 @@ from os.path import basename, splitext
 import numpy as np
 from scipy.stats import spearmanr
 from skbio.stats.composition import clr_inv
-from minstrel.util import rank_hits
+
+
+
+def rank_hits(ranks, sorted_idx, k, pos=True):
+    """ Creates an edge list based on rank matrix.
+    Parameters
+    ----------
+    ranks : pd.DataFrame
+       Matrix of ranks
+    sorted_idx : pd.DataFrame
+       Sorted index corresponding to ranks
+    k : int
+       Number of nearest neighbors
+    pos : bool
+       Specifies either most associated or least associated.
+       This is a proxy to positively correlated or negatively correlated.
+    Returns
+    -------
+    edges : pd.DataFrame
+       List of edges along with corresponding ranks.
+    """
+    axis = 1
+
+
+    idx = ranks.index
+    if pos:
+        topk = sorted_idx.apply(lambda x: x[-k:])
+    else:
+        topk = sorted_idx.apply(lambda x: x[:k])
+    print(idx)
+    print(topk)
+    #topk = pd.DataFrame([x for x in topk], index=idx)
+    top_hits = topk.reset_index()
+    top_hits = top_hits.rename(columns={'index': 'src'})
+    print(top_hits)
+    edges = pd.melt(
+        top_hits, id_vars=['src'],
+        var_name='rank',
+        value_vars=list(range(k)),
+        value_name='dest')
+
+    # fill in actual ranks
+    for i in edges.index:
+        src = edges.loc[i, 'src']
+        dest = edges.loc[i, 'dest']
+        print(src, dest)
+
+        edges.loc[i, 'rank'] = ranks.loc[src, dest]
+    edges['rank'] = edges['rank'].astype(np.float64)
+    return edges
 
 
 def rank_accuracy(res, exp, top_N):
@@ -13,8 +62,9 @@ def rank_accuracy(res, exp, top_N):
     tps = fps = fns = tns = 0
     ids = set(exp.columns)
     for i in exp.index:
-        exp_idx = np.argsort(exp.loc[i, :].values)
-        res_idx = np.argsort(res.loc[i, :].values)
+        exp_idx = exp.loc[i, :].values
+        res_idx = res.loc[i, :]
+
         exp_names = exp.columns[exp_idx[-top_N:]]
         res_names = res.columns[res_idx[-top_N:]]
 
@@ -218,12 +268,13 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
 
     pos_results = []
     neg_results = []
-
+    # sort_f = lambda x: list(x.index[np.argsort(x)])
+    sorted_ranks = ranks.apply(np.argsort, axis=1)
     idx = np.arange(0, k_max+1)
     for k in idx:
         if axis == 1:
-            res_pos_edges = rank_hits(ranks, k, pos=True)
-            res_neg_edges = rank_hits(ranks, k, pos=False)
+            res_pos_edges = rank_hits(ranks, sorted_ranks, k, pos=True)
+            res_neg_edges = rank_hits(ranks, sorted_ranks, k, pos=False)
 
             res_pos_edges = res_pos_edges.rename(
                 columns={'src': 'metabolite', 'dest': 'microbe'}
@@ -232,8 +283,8 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
                 columns={'src': 'metabolite', 'dest': 'microbe'}
             )
         else:
-            res_pos_edges = rank_hits(ranks.T, k, pos=True)
-            res_neg_edges = rank_hits(ranks.T, k, pos=False)
+            res_pos_edges = rank_hits(ranks.T, sorted_ranks, k, pos=True)
+            res_neg_edges = rank_hits(ranks.T, sorted_ranks, k, pos=False)
 
             res_pos_edges = res_pos_edges.rename(
                 columns={'dest': 'metabolite', 'src': 'microbe'}
@@ -241,7 +292,6 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
             res_neg_edges = res_neg_edges.rename(
                 columns={'dest': 'metabolite', 'src': 'microbe'}
             )
-
 
         exp_pos_edges = edges.loc[edges.direction==1]
         exp_neg_edges = edges.loc[edges.direction==-1]
@@ -273,7 +323,3 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
     pos_results = pd.DataFrame(pos_results, index=idx)
     neg_results = pd.DataFrame(neg_results, index=idx)
     return pos_results, neg_results
-
-
-
-
