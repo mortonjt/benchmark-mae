@@ -16,12 +16,12 @@ import tempfile
 from subprocess import Popen
 import io
 from patsy import dmatrix
-from skbio.stats.composition import clr, centralize
+from skbio.stats.composition import clr, centralize, clr_inv
 from skbio.stats.composition import clr_inv as softmax
 import tensorflow as tf
 from tensorflow.contrib.distributions import Multinomial, Normal
 # note that the name will change
-from minstrel.multimodal import Autoencoder
+from rhapsody.multimodal import MMvec
 from songbird.multinomial import MultRegression
 
 import pickle
@@ -80,10 +80,10 @@ def run_deep_mae(table1_file, table2_file, output_file):
     params = []
 
     with tf.Graph().as_default(), tf.Session() as session:
-        model = Autoencoder(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
-                            batch_size=batch_size, latent_dim=latent_dim,
-                            learning_rate=learning_rate, beta_1=0.85, beta_2=0.9,
-                            clipnorm=10., save_path=None)
+        model = MMvec(u_mean=0, u_scale=1, v_mean=0, v_scale=1,
+                      batch_size=batch_size, latent_dim=latent_dim,
+                      learning_rate=learning_rate, beta_1=0.85, beta_2=0.9,
+                      clipnorm=10., save_path=None)
         model(session, coo_matrix(microbes_df.values), metabolites_df.values)
         model.fit(epoch=epochs)
 
@@ -232,16 +232,21 @@ def run_multinomial(table_file, metadata_file, category, output_file):
     model = MultRegression(
         batch_size=3, learning_rate=1e-3, beta_scale=1)
     Y = table.values
-    X = metadata.values
+    X = metadata[['intercept', category]].values
     trainX = X[:-5]
     trainY = Y[:-5]
     testX = X[-5:]
     testY = Y[-5:]
     with tf.Graph().as_default(), tf.Session() as session:
         model(session, trainX, trainY, testX, testY)
-        loss, cv, _ = model.fit(epoch=int(50000))
+        loss, cv, _ = model.fit(epoch=int(1000))
+        beta_ = clr(
+            clr_inv(
+                np.hstack((np.zeros((model.p, 1)), model.B))
+            )
+        )
     res = pd.DataFrame(
-        model.B.T, columns=['intercept', 'statistic'],
+        beta_.T, columns=['intercept', 'statistic'],
         index=table.columns
     )
     res.to_csv(output_file, sep='\t')
