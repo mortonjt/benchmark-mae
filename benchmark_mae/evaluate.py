@@ -6,56 +6,6 @@ from scipy.stats import spearmanr
 from skbio.stats.composition import clr_inv
 
 
-
-def rank_hits(ranks, sorted_idx, k, pos=True):
-    """ Creates an edge list based on rank matrix.
-    Parameters
-    ----------
-    ranks : pd.DataFrame
-       Matrix of ranks
-    sorted_idx : pd.DataFrame
-       Sorted index corresponding to ranks
-    k : int
-       Number of nearest neighbors
-    pos : bool
-       Specifies either most associated or least associated.
-       This is a proxy to positively correlated or negatively correlated.
-    Returns
-    -------
-    edges : pd.DataFrame
-       List of edges along with corresponding ranks.
-    """
-    axis = 1
-
-
-    idx = ranks.index
-    if pos:
-        topk = sorted_idx.apply(lambda x: x[-k:])
-    else:
-        topk = sorted_idx.apply(lambda x: x[:k])
-    print(idx)
-    print(topk)
-    #topk = pd.DataFrame([x for x in topk], index=idx)
-    top_hits = topk.reset_index()
-    top_hits = top_hits.rename(columns={'index': 'src'})
-    print(top_hits)
-    edges = pd.melt(
-        top_hits, id_vars=['src'],
-        var_name='rank',
-        value_vars=list(range(k)),
-        value_name='dest')
-
-    # fill in actual ranks
-    for i in edges.index:
-        src = edges.loc[i, 'src']
-        dest = edges.loc[i, 'dest']
-        print(src, dest)
-
-        edges.loc[i, 'rank'] = ranks.loc[src, dest]
-    edges['rank'] = edges['rank'].astype(np.float64)
-    return edges
-
-
 def rank_accuracy(res, exp, top_N):
     ids = exp.index[:top_N]
     rank_stats = []
@@ -268,30 +218,28 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
 
     pos_results = []
     neg_results = []
-    # sort_f = lambda x: list(x.index[np.argsort(x)])
-    sorted_ranks = ranks.apply(np.argsort, axis=1)
-    idx = np.arange(0, k_max+1)
+    sort_f = lambda x: list(x.index[np.argsort(x)])
+    sorted_ranks = pd.DataFrame(list(ranks.apply(sort_f, axis=1).values),
+                                index=ranks.index)
+
+    sranks = pd.DataFrame(
+        list(ranks.apply(
+            lambda x: list(ranks.columns[np.argsort(x)]), axis=1)
+        )
+    )
+    sranks.index=ranks.index
+
+    idx = np.arange(1, k_max+1)
     for k in idx:
-        if axis == 1:
-            res_pos_edges = rank_hits(ranks, sorted_ranks, k, pos=True)
-            res_neg_edges = rank_hits(ranks, sorted_ranks, k, pos=False)
+        # assume axis 1 only, since we can only rank metabolites
+        # if axis == 1:
+        pos_edges = sranks.iloc[:, -k:].stack().reset_index()[['level_0', 0]]
+        res_pos_edges = pos_edges.rename(
+            columns={'level_0': 'microbe', 0: 'metabolite'})
 
-            res_pos_edges = res_pos_edges.rename(
-                columns={'src': 'metabolite', 'dest': 'microbe'}
-            )
-            res_neg_edges = res_neg_edges.rename(
-                columns={'src': 'metabolite', 'dest': 'microbe'}
-            )
-        else:
-            res_pos_edges = rank_hits(ranks.T, sorted_ranks, k, pos=True)
-            res_neg_edges = rank_hits(ranks.T, sorted_ranks, k, pos=False)
-
-            res_pos_edges = res_pos_edges.rename(
-                columns={'dest': 'metabolite', 'src': 'microbe'}
-            )
-            res_neg_edges = res_neg_edges.rename(
-                columns={'dest': 'metabolite', 'src': 'microbe'}
-            )
+        neg_edges = sranks.iloc[:, :k].stack().reset_index()[['level_0', 0]]
+        res_neg_edges = neg_edges.rename(
+            columns={'level_0': 'microbe', 0: 'metabolite'})
 
         exp_pos_edges = edges.loc[edges.direction==1]
         exp_neg_edges = edges.loc[edges.direction==-1]
@@ -319,6 +267,7 @@ def _edge_roc_curve(ranks, edges, k_max=10, axis=1):
         FP = len(res_neg_edges - exp_neg_edges)
         FN = len(exp_neg_edges - res_neg_edges)
         neg_results.append({'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN})
+
 
     pos_results = pd.DataFrame(pos_results, index=idx)
     neg_results = pd.DataFrame(neg_results, index=idx)

@@ -1,7 +1,7 @@
 import unittest
 import pandas as pd
 import numpy as np
-from benchmark_mae.evaluate import rank_hits, _edge_roc_curve
+from benchmark_mae.evaluate import _edge_roc_curve
 import pandas.util.testing as pdt
 
 
@@ -37,18 +37,18 @@ class TestEvaluateBiofilm(unittest.TestCase):
         res_pos, res_neg = _edge_roc_curve(self.ranks.T, self.edges, k_max=2)
 
         exp_pos = pd.DataFrame(
-            [[2, 0, 2, 0],
-             [1, 2, 2, 1],
-             [0, 4, 2, 2]],
-            columns=['FN', 'FP', 'TN', 'TP']
+            [[1, 2, 4, 1],
+             [0, 4, 4, 2]],
+            columns=['FN', 'FP', 'TN', 'TP'],
+            index=[1, 2]
         )
         pdt.assert_frame_equal(res_pos, exp_pos)
 
         exp_neg = pd.DataFrame(
-            [[1, 0, 2, 0],
-             [0, 2, 2, 1],
-             [0, 5, 2, 1]],
-            columns=['FN', 'FP', 'TN', 'TP']
+            [[0, 2, 4, 1],
+             [0, 5, 4, 1]],
+            columns=['FN', 'FP', 'TN', 'TP'],
+            index=[1, 2]
         )
         pdt.assert_frame_equal(res_neg, exp_neg)
 
